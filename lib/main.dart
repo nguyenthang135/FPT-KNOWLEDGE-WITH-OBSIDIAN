@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'vault/note_file.dart';
+import 'vault/local_vault_repository.dart';
+import 'vault/vault_controller.dart';
+import 'vault/vault_picker.dart';
+import 'vault/vault_tree.dart';
 
 void main() {
   runApp(const FptuSeBrainApp());
@@ -13,55 +18,6 @@ class AppColors {
   static const textSecondary = Color(0xFF94A3B8);
   static const success = Color(0xFF4ADE80);
 }
-
-class NoteItem {
-  const NoteItem({
-    required this.title,
-    required this.course,
-    required this.content,
-    required this.tags,
-  });
-
-  final String title;
-  final String course;
-  final String content;
-  final List<String> tags;
-}
-
-const demoNotes = [
-  NoteItem(
-    title: 'Flutter cơ bản',
-    course: 'PRM393',
-    content:
-        'Flutter giúp tạo ứng dụng cho nhiều nền tảng từ một bộ mã nguồn. '
-        'Widget là thành phần tạo nên giao diện của ứng dụng.',
-    tags: ['flutter', 'widget'],
-  ),
-  NoteItem(
-    title: 'Quản lý State',
-    course: 'PRM393',
-    content:
-        'State là dữ liệu có thể thay đổi trong quá trình ứng dụng hoạt động. '
-        'Khi state thay đổi, Flutter sẽ cập nhật phần giao diện liên quan.',
-    tags: ['flutter', 'state-management'],
-  ),
-  NoteItem(
-    title: 'Navigation & Routing',
-    course: 'PRM393',
-    content:
-        'Navigation giúp người dùng di chuyển giữa các màn hình. Routing là '
-        'cách ứng dụng quản lý những đường đi đó.',
-    tags: ['flutter', 'navigation'],
-  ),
-  NoteItem(
-    title: 'Kiểm thử phần mềm',
-    course: 'SWT301',
-    content:
-        'Kiểm thử phần mềm giúp tìm lỗi sớm và bảo đảm sản phẩm hoạt động '
-        'đúng như mong đợi.',
-    tags: ['testing', 'quality'],
-  ),
-];
 
 class FptuSeBrainApp extends StatelessWidget {
   const FptuSeBrainApp({super.key});
@@ -111,44 +67,67 @@ class WorkspaceScreen extends StatefulWidget {
 }
 
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
-  NoteItem _selectedNote = demoNotes.first;
+  final _vault = VaultController(const LocalVaultRepository());
+  final _picker = const VaultPicker();
+  bool _picking = false;
   String _searchText = '';
   String _aiMessage = 'Chọn một tác vụ để AI hỗ trợ bạn học bài.';
 
-  List<NoteItem> get _filteredNotes {
-    final keyword = _searchText.trim().toLowerCase();
-    if (keyword.isEmpty) {
-      return demoNotes;
+  @override
+  void initState() {
+    super.initState();
+    _vault.addListener(_onVaultChanged);
+  }
+
+  void _onVaultChanged() { if (mounted) setState(() {}); }
+
+  @override
+  void dispose() {
+    _vault.removeListener(_onVaultChanged);
+    _vault.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openVault() async {
+    if (_picking || _vault.scanning) return;
+    setState(() => _picking = true);
+    try {
+      final path = await _picker.pickDirectory();
+      if (!mounted || path == null) return;
+      await _vault.open(path);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Không mở được hộp chọn thư mục. Hãy chạy bản Windows và thử lại.')));
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
     }
-
-    return demoNotes.where((note) {
-      return note.title.toLowerCase().contains(keyword) ||
-          note.course.toLowerCase().contains(keyword) ||
-          note.tags.any((tag) => tag.toLowerCase().contains(keyword));
-    }).toList();
   }
 
-  void _selectNote(NoteItem note) {
-    setState(() {
-      _selectedNote = note;
-      _aiMessage = 'Bạn đang đọc “${note.title}”. AI đã sẵn sàng hỗ trợ.';
-    });
-  }
-
-  void _showVaultMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Chức năng chọn Vault sẽ được tích hợp ở phần đọc file.'),
-      ),
-    );
+  void _selectNote(NoteFile note) {
+    _aiMessage = 'Chọn một tác vụ để AI hỗ trợ bạn học bài.';
+    _vault.select(note);
   }
 
   void _showAiMessage(String action) {
+    final note = _vault.selectedNote;
+    if (note == null) return;
     setState(() {
-      _aiMessage =
-          '$action cho bài “${_selectedNote.title}” sẽ được hiển thị tại đây '
+      _aiMessage = '$action cho bài “${note.title}” sẽ được hiển thị tại đây '
           'sau khi phần AI được tích hợp.';
     });
+  }
+
+  Widget _reader() {
+    if (_vault.reading) return const Center(child: CircularProgressIndicator());
+    if (_vault.readError != null) {
+      return Center(child: Padding(padding: const EdgeInsets.all(24),
+        child: Text('${_vault.readError}\nChọn lại file để thử lại hoặc quét lại Vault.')));
+    }
+    final note = _vault.selectedNote;
+    if (note == null) return const Center(child: Text('Chọn một ghi chú để đọc.'));
+    return NotePreview(note: note);
   }
 
   @override
@@ -163,7 +142,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   _searchText = value;
                 });
               },
-              onOpenVault: _showVaultMessage,
+              onOpenVault: _picking || _vault.scanning ? null : _openVault,
             ),
             const Divider(height: 1, color: AppColors.surfaceLight),
             Expanded(
@@ -175,18 +154,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                     children: [
                       SizedBox(
                         width: constraints.maxWidth < 800 ? 220 : 270,
-                        child: VaultSidebar(
-                          notes: _filteredNotes,
-                          selectedNote: _selectedNote,
-                          onSelect: _selectNote,
-                        ),
+                        child: _vault.scanning
+                            ? const Center(child: CircularProgressIndicator())
+                            : _vault.snapshot == null
+                              ? Center(child: Padding(padding: const EdgeInsets.all(16),
+                                  child: Text(_vault.error ?? 'Chọn Vault để mở thư mục ghi chú.')))
+                              : VaultTree(
+                                  snapshot: _vault.snapshot!,
+                                  selectedPath: _vault.selectedPath,
+                                  onSelect: _selectNote,
+                                  query: _searchText,
+                                  onRefresh: () => _vault.open(_vault.snapshot!.root.path),
+                                ),
                       ),
                       const VerticalDivider(
                         width: 1,
                         color: AppColors.surfaceLight,
                       ),
-                      Expanded(child: NotePreview(note: _selectedNote)),
-                      if (showAiPanel) ...[
+                      Expanded(child: _reader()),
+                      if (showAiPanel && _vault.selectedNote != null) ...[
                         const VerticalDivider(
                           width: 1,
                           color: AppColors.surfaceLight,
@@ -194,7 +180,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                         SizedBox(
                           width: 340,
                           child: AiAssistantPanel(
-                            note: _selectedNote,
+                            note: _vault.selectedNote!,
                             message: _aiMessage,
                             onAction: _showAiMessage,
                           ),
@@ -205,7 +191,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 },
               ),
             ),
-            const _StatusBar(),
+            _StatusBar(path: _vault.snapshot?.root.path, busy: _vault.scanning || _vault.reading),
           ],
         ),
       ),
@@ -217,7 +203,7 @@ class _TopBar extends StatelessWidget {
   const _TopBar({required this.onSearchChanged, required this.onOpenVault});
 
   final ValueChanged<String> onSearchChanged;
-  final VoidCallback onOpenVault;
+  final VoidCallback? onOpenVault;
 
   @override
   Widget build(BuildContext context) {
@@ -258,154 +244,10 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class VaultSidebar extends StatelessWidget {
-  const VaultSidebar({
-    super.key,
-    required this.notes,
-    required this.selectedNote,
-    required this.onSelect,
-  });
-
-  final List<NoteItem> notes;
-  final NoteItem selectedNote;
-  final ValueChanged<NoteItem> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final courses = <String>{for (final note in notes) note.course}.toList();
-
-    return ColoredBox(
-      color: AppColors.surface,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
-        children: [
-          const _SidebarTitle(title: 'GHI CHÚ HỌC TẬP'),
-          const SizedBox(height: 12),
-          if (notes.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Không tìm thấy ghi chú phù hợp.',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-          for (final course in courses) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 18, 8, 6),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.school_outlined,
-                    color: AppColors.primary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    course,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-            for (final note in notes.where((item) => item.course == course))
-              _NoteTile(
-                note: note,
-                isSelected: note.title == selectedNote.title,
-                onTap: () => onSelect(note),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarTitle extends StatelessWidget {
-  const _SidebarTitle({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: AppColors.textSecondary,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.1,
-      ),
-    );
-  }
-}
-
-class _NoteTile extends StatelessWidget {
-  const _NoteTile({
-    required this.note,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final NoteItem note;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: isSelected ? AppColors.surfaceLight : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: isSelected ? AppColors.primary : Colors.transparent,
-                  width: 3,
-                ),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.description_outlined,
-                  size: 18,
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    note.title,
-                    style: TextStyle(
-                      color: isSelected
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class NotePreview extends StatelessWidget {
   const NotePreview({super.key, required this.note});
 
-  final NoteItem note;
+  final NoteFile note;
 
   @override
   Widget build(BuildContext context) {
@@ -443,77 +285,21 @@ class NotePreview extends StatelessWidget {
                   .toList(),
             ),
             const SizedBox(height: 28),
-            Text(
-              note.content,
+            SelectableText(
+              note.content!.isEmpty ? '(File rỗng)' : note.content!,
               style: const TextStyle(
                 fontSize: 17,
                 height: 1.65,
                 color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 30),
-            const Text(
-              'Ý chính',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            const _KeyPoint(text: 'Nội dung được trình bày rõ ràng, dễ đọc.'),
-            const _KeyPoint(text: 'Tags giúp người dùng phân loại kiến thức.'),
-            const _KeyPoint(text: 'AI sẽ hỗ trợ tóm tắt và ôn tập bài học.'),
-            const SizedBox(height: 28),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.surfaceLight),
-              ),
-              child: const SelectableText(
-                'void main() {\n'
-                '  runApp(const FptuSeBrainApp());\n'
-                '}',
-                style: TextStyle(
-                  fontFamily: 'Consolas',
-                  color: Color(0xFF67E8F9),
-                  height: 1.6,
-                ),
-              ),
-            ),
+            const SizedBox(height: 24),
+            SelectableText('Đường dẫn: ${note.path}\n'
+                'Kích thước: ${note.sizeBytes} bytes\n'
+                'Sửa lần cuối: ${note.modified.toLocal()}',
+                style: const TextStyle(color: AppColors.textSecondary)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _KeyPoint extends StatelessWidget {
-  const _KeyPoint({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 7),
-            child: Icon(Icons.circle, color: AppColors.primary, size: 8),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -527,7 +313,7 @@ class AiAssistantPanel extends StatelessWidget {
     required this.onAction,
   });
 
-  final NoteItem note;
+  final NoteFile note;
   final String message;
   final ValueChanged<String> onAction;
 
@@ -642,7 +428,9 @@ class _AiActionButton extends StatelessWidget {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar();
+  const _StatusBar({this.path, required this.busy});
+  final String? path;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -650,22 +438,22 @@ class _StatusBar extends StatelessWidget {
       width: double.infinity,
       color: AppColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.storage_outlined,
             size: 18,
             color: AppColors.textSecondary,
           ),
-          SizedBox(width: 8),
-          Text(
-            'Vault: Chưa chọn thư mục',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-          Spacer(),
-          Icon(Icons.circle, size: 10, color: AppColors.success),
-          SizedBox(width: 8),
-          Text('Sẵn sàng', style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(
+            'Vault: ${path ?? 'Chưa chọn thư mục'}',
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textSecondary),
+          )),
+          const Icon(Icons.circle, size: 10, color: AppColors.success),
+          const SizedBox(width: 8),
+          Text(busy ? 'Đang tải...' : 'Sẵn sàng', style: const TextStyle(color: AppColors.textSecondary)),
         ],
       ),
     );
