@@ -53,6 +53,18 @@ class VaultController extends ChangeNotifier {
       final result = await repository.readNote(note);
       if (_disposed || id != _readId) return;
       selectedNote = result;
+      if (snapshot != null) {
+        final index = snapshot!.notes.indexWhere((n) => n.path == result.path);
+        if (index != -1) {
+          final updatedNotes = List<NoteFile>.from(snapshot!.notes);
+          updatedNotes[index] = result;
+          snapshot = VaultSnapshot(
+            root: snapshot!.root,
+            notes: List.unmodifiable(updatedNotes),
+            warnings: snapshot!.warnings,
+          );
+        }
+      }
     } catch (e) {
       if (_disposed || id != _readId) return;
       readError = e is VaultException ? e.message : 'Không đọc được ghi chú.';

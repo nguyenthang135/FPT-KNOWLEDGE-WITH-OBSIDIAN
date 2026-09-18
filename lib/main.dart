@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'vault/note_file.dart';
 import 'vault/local_vault_repository.dart';
 import 'vault/vault_controller.dart';
@@ -79,7 +81,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     _vault.addListener(_onVaultChanged);
   }
 
-  void _onVaultChanged() { if (mounted) setState(() {}); }
+  void _onVaultChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
@@ -97,8 +101,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       await _vault.open(path);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Không mở được hộp chọn thư mục. Hãy chạy bản Windows và thử lại.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không mở được hộp chọn thư mục. Hãy chạy bản Windows và thử lại.',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -114,7 +123,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final note = _vault.selectedNote;
     if (note == null) return;
     setState(() {
-      _aiMessage = '$action cho bài “${note.title}” sẽ được hiển thị tại đây '
+      _aiMessage =
+          '$action cho bài “${note.title}” sẽ được hiển thị tại đây '
           'sau khi phần AI được tích hợp.';
     });
   }
@@ -122,12 +132,69 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Widget _reader() {
     if (_vault.reading) return const Center(child: CircularProgressIndicator());
     if (_vault.readError != null) {
-      return Center(child: Padding(padding: const EdgeInsets.all(24),
-        child: Text('${_vault.readError}\nChọn lại file để thử lại hoặc quét lại Vault.')));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            '${_vault.readError}\nChọn lại file để thử lại hoặc quét lại Vault.',
+          ),
+        ),
+      );
     }
     final note = _vault.selectedNote;
-    if (note == null) return const Center(child: Text('Chọn một ghi chú để đọc.'));
-    return NotePreview(note: note);
+    if (note == null) {
+      return const Center(child: Text('Chọn một ghi chú để đọc.'));
+    }
+    return NotePreview(
+      note: note,
+      allNotes: _vault.snapshot!.notes,
+      onOpenNotePath: (targetName) {
+        if (_vault.snapshot == null) return;
+        final notes = _vault.snapshot!.notes;
+
+        // Chuẩn hóa tên cần tìm
+        var rawClean = Uri.decodeComponent(targetName).trim();
+        if (rawClean.endsWith('.md')) {
+          rawClean = rawClean.substring(0, rawClean.length - 3);
+        }
+        final searchName = rawClean
+            .replaceAll('\\', '/')
+            .split('/')
+            .last
+            .trim()
+            .toLowerCase();
+
+        final target = notes.cast<NoteFile?>().firstWhere((n) {
+          final noteTitle = n!.title.trim().toLowerCase();
+          final fileName = n.name.trim().toLowerCase();
+          final fileNameNoExt = fileName.endsWith('.md')
+              ? fileName.substring(0, fileName.length - 3)
+              : fileName;
+          final relPath = n.relativePath.replaceAll('\\', '/').toLowerCase();
+
+          return noteTitle == searchName ||
+              fileNameNoExt == searchName ||
+              fileName == searchName ||
+              relPath.endsWith('/$searchName.md') ||
+              relPath.endsWith('/$searchName');
+        }, orElse: () => null);
+
+        if (target != null) {
+          _selectNote(target);
+        } else {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Không tìm thấy ghi chú “$targetName” trong Vault.',
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      },
+    );
   }
 
   @override
@@ -157,15 +224,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                         child: _vault.scanning
                             ? const Center(child: CircularProgressIndicator())
                             : _vault.snapshot == null
-                              ? Center(child: Padding(padding: const EdgeInsets.all(16),
-                                  child: Text(_vault.error ?? 'Chọn Vault để mở thư mục ghi chú.')))
-                              : VaultTree(
-                                  snapshot: _vault.snapshot!,
-                                  selectedPath: _vault.selectedPath,
-                                  onSelect: _selectNote,
-                                  query: _searchText,
-                                  onRefresh: () => _vault.open(_vault.snapshot!.root.path),
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                    _vault.error ??
+                                        'Chọn Vault để mở thư mục ghi chú.',
+                                  ),
                                 ),
+                              )
+                            : VaultTree(
+                                snapshot: _vault.snapshot!,
+                                selectedPath: _vault.selectedPath,
+                                onSelect: _selectNote,
+                                query: _searchText,
+                                onRefresh: () =>
+                                    _vault.open(_vault.snapshot!.root.path),
+                              ),
                       ),
                       const VerticalDivider(
                         width: 1,
@@ -191,7 +266,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 },
               ),
             ),
-            _StatusBar(path: _vault.snapshot?.root.path, busy: _vault.scanning || _vault.reading),
+            _StatusBar(
+              path: _vault.snapshot?.root.path,
+              busy: _vault.scanning || _vault.reading,
+            ),
           ],
         ),
       ),
@@ -245,12 +323,132 @@ class _TopBar extends StatelessWidget {
 }
 
 class NotePreview extends StatelessWidget {
-  const NotePreview({super.key, required this.note});
+  const NotePreview({
+    super.key,
+    required this.note,
+    required this.allNotes,
+    this.onOpenNotePath,
+  });
 
   final NoteFile note;
+  final ValueChanged<String>? onOpenNotePath;
+  final List<NoteFile> allNotes;
+  List<NoteFile> _findRelatedNotes() {
+    String clean(String s) {
+      var trimmed = s.trim().toLowerCase().replaceAll('\\', '/');
+      if (trimmed.contains('/')) {
+        trimmed = trimmed.split('/').last;
+      }
+      if (trimmed.endsWith('.md')) {
+        trimmed = trimmed.substring(0, trimmed.length - 3);
+      }
+      return trimmed;
+    }
+
+    final currentTitle = clean(note.title);
+    final currentFileName = clean(note.name);
+
+    return allNotes.where((other) {
+      if (other.path == note.path) {
+        return false;
+      }
+
+      String content = other.content ?? '';
+      if (content.isEmpty) {
+        try {
+          content = File(other.path).readAsStringSync();
+        } catch (_) {}
+      }
+
+      if (content.isEmpty) return false;
+
+      final regex = RegExp(
+        r'\[\[([^\]\|]+)(?:\|[^\]]+)?\]\]',
+        caseSensitive: false,
+      );
+
+      for (final match in regex.allMatches(content)) {
+        final rawTarget = match.group(1);
+        if (rawTarget == null) continue;
+        final target = clean(rawTarget);
+
+        if (target == currentTitle || target == currentFileName) {
+          return true;
+        }
+      }
+
+      return false;
+    }).toList();
+  }
+
+  Widget _buildRelatedNotes() {
+    final relatedNotes = _findRelatedNotes();
+
+    if (relatedNotes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Related Notes',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          ...relatedNotes.map(
+            (related) => Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.note_outlined),
+                title: Text(related.title),
+                onTap: () {
+                  onOpenNotePath?.call(related.title);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final rawContent = note.content!.isEmpty ? '(File rỗng)' : note.content!;
+
+    // 1. Chuyển đổi [[Ten Ghi Chu]] hoặc [[Ten Ghi Chu|Ten Hien Thi]] thành Markdown Link dạng [Ten Hien Thi](https://wikilink/Ten Ghi Chu)
+    final processedWikiLinks = rawContent.replaceAllMapped(
+      RegExp(r'\[\[([^\]\|]+)(?:\|([^\]]+))?\]\]'),
+      (match) {
+        final target = match.group(1)!.trim();
+        final label = match.group(2)?.trim() ?? target;
+        final encodedTarget = Uri.encodeComponent(target);
+        return '[$label](https://wikilink/$encodedTarget)';
+      },
+    );
+
+    // 2. Tự động chuyển iframe Youtube thành ảnh Thumbnail và nút phát Video trực tiếp
+    final iframeRegex = RegExp(
+      '<iframe[^>]*src=["\'](?:https?:)?//(?:www\\.)?youtube\\.com/embed/([a-zA-Z0-9_-]+)["\'][^>]*>\\s*</iframe>',
+      caseSensitive: false,
+    );
+    final processedContent = processedWikiLinks.replaceAllMapped(iframeRegex, (
+      match,
+    ) {
+      final videoId = match.group(1)!;
+      final watchUrl = 'https://www.youtube.com/watch?v=$videoId';
+      return '[![Watch on YouTube](https://img.youtube.com/vi/$videoId/hqdefault.jpg)]($watchUrl)\n\n▶️ **[Bấm vào đây để mở và xem Video trên YouTube]($watchUrl)**';
+    });
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: ConstrainedBox(
@@ -284,25 +482,147 @@ class NotePreview extends StatelessWidget {
                   )
                   .toList(),
             ),
+            const SizedBox(height: 24),
+
+            _buildProperties(note),
+            const SizedBox(height: 24),
+
+            _buildRelatedNotes(),
             const SizedBox(height: 28),
-            SelectableText(
-              note.content!.isEmpty ? '(File rỗng)' : note.content!,
-              style: const TextStyle(
-                fontSize: 17,
-                height: 1.65,
-                color: AppColors.textSecondary,
-              ),
+            MarkdownBody(
+              data: processedContent,
+              onTapLink: (text, href, title) async {
+                if (href == null) return;
+                if (href.startsWith('https://wikilink/')) {
+                  final rawTarget = href.substring('https://wikilink/'.length);
+                  final targetName = Uri.decodeComponent(rawTarget);
+                  onOpenNotePath?.call(targetName);
+                } else if (href.startsWith('http://') ||
+                    href.startsWith('https://')) {
+                  // Mở đường dẫn web ngoài bằng trình duyệt mặc định của hệ thống Windows
+                  try {
+                    await Process.run('cmd', ['/c', 'start', '', href]);
+                  } catch (_) {}
+                }
+              },
+              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
+                  .copyWith(
+                    a: const TextStyle(
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    p: const TextStyle(
+                      fontSize: 16,
+                      height: 1.6,
+                      color: AppColors.textPrimary,
+                    ),
+                    h1: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                    h2: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                    h3: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                    code: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontFamily: 'Consolas',
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                    checkbox: const TextStyle(color: AppColors.primary),
+                    codeblockPadding: const EdgeInsets.all(16),
+                    codeblockDecoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppColors.surfaceLight,
+                        width: 1,
+                      ),
+                    ),
+                    blockquotePadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    blockquoteDecoration: const BoxDecoration(
+                      color: Color(0xFF1E293B),
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(8),
+                        bottomRight: Radius.circular(8),
+                      ),
+                      border: Border(
+                        left: BorderSide(color: AppColors.primary, width: 4),
+                      ),
+                    ),
+                  ),
             ),
             const SizedBox(height: 24),
-            SelectableText('Đường dẫn: ${note.path}\n'
-                'Kích thước: ${note.sizeBytes} bytes\n'
-                'Sửa lần cuối: ${note.modified.toLocal()}',
-                style: const TextStyle(color: AppColors.textSecondary)),
+            SelectableText(
+              'Đường dẫn: ${note.path}\n'
+              'Kích thước: ${note.sizeBytes} bytes\n'
+              'Sửa lần cuối: ${note.modified.toLocal()}',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+Widget _buildProperties(NoteFile note) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Properties',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+
+        _propertyRow('Course', note.course),
+        _propertyRow('Title', note.title),
+        _propertyRow(
+          'Tags',
+          note.tags.isEmpty ? 'No tags' : note.tags.join(', '),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _propertyRow(String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+        Expanded(child: Text(value)),
+      ],
+    ),
+  );
 }
 
 class AiAssistantPanel extends StatelessWidget {
@@ -446,14 +766,20 @@ class _StatusBar extends StatelessWidget {
             color: AppColors.textSecondary,
           ),
           const SizedBox(width: 8),
-          Expanded(child: Text(
-            'Vault: ${path ?? 'Chưa chọn thư mục'}',
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.textSecondary),
-          )),
+          Expanded(
+            child: Text(
+              'Vault: ${path ?? 'Chưa chọn thư mục'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
           const Icon(Icons.circle, size: 10, color: AppColors.success),
           const SizedBox(width: 8),
-          Text(busy ? 'Đang tải...' : 'Sẵn sàng', style: const TextStyle(color: AppColors.textSecondary)),
+          Text(
+            busy ? 'Đang tải...' : 'Sẵn sàng',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
         ],
       ),
     );
