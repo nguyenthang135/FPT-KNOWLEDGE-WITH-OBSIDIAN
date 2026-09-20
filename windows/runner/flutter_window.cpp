@@ -1,4 +1,5 @@
 #include "flutter_window.h"
+#include "vault_picker.h"
 
 #include <optional>
 
@@ -25,6 +26,7 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  RegisterVaultPicker(flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
