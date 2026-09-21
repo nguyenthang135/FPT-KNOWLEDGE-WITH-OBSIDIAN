@@ -558,6 +558,7 @@ class _CurriculumOverviewScreenState
           for (final semester
               in semesterNumbers) ...[
             _SemesterCard(
+              curriculumCode: widget.curriculumCode,
               semester: semester,
               normalSubjects:
                   normalSubjects
@@ -753,6 +754,7 @@ class _KnowledgeFolderCard
 
 class _SemesterCard
     extends StatelessWidget {
+  final String curriculumCode;
   final int semester;
 
   final List<CurriculumSubject>
@@ -765,6 +767,7 @@ class _SemesterCard
       selectedCombo;
 
   const _SemesterCard({
+    required this.curriculumCode,
     required this.semester,
     required this.normalSubjects,
     required this.comboPlaceholders,
@@ -834,6 +837,7 @@ class _SemesterCard
                   MaterialPageRoute(
                     builder: (_) =>
                         SubjectDetailScreen(
+                      curriculumCode: curriculumCode,
                       subject: subject,
                     ),
                   ),
@@ -908,6 +912,7 @@ class _SemesterCard
                     MaterialPageRoute(
                       builder: (_) =>
                           SubjectDetailScreen(
+                        curriculumCode: curriculumCode,
                         subject: subject,
                       ),
                     ),

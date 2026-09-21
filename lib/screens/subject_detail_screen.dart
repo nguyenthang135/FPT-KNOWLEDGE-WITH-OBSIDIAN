@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../ai/widgets/ai_assistant_dialog.dart';
 import '../flm/flm_syllabus_service.dart';
 import '../models/curriculum_subject.dart';
 
 class SubjectDetailScreen extends StatefulWidget {
+  final String curriculumCode;
   final CurriculumSubject subject;
 
   const SubjectDetailScreen({
     super.key,
+    required this.curriculumCode,
     required this.subject,
   });
 
@@ -206,6 +209,25 @@ class _SubjectDetailScreenState
                   ),
                 ),
             ],
+          ),
+
+          const SizedBox(
+            height: 20,
+          ),
+
+          FilledButton.icon(
+            onPressed: () {
+              showDialog<void>(
+                context: context,
+                builder: (_) => AiAssistantDialog(
+                  curriculumCode: widget.curriculumCode,
+                  subject: widget.subject,
+                  syllabus: syllabus,
+                ),
+              );
+            },
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('Trợ lý AI'),
           ),
 
           if (syllabus

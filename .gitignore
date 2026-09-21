@@ -33,6 +33,12 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local AI configuration and personal Obsidian vault data
+.env
+.env.*
+!.env.example
+FPT Knowledge Vault/
+
 # Symbolication related
 app.*.symbols
 
