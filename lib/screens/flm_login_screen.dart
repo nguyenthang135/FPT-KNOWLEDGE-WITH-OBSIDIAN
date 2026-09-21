@@ -7,31 +7,22 @@ import '../flm/flm_session.dart';
 import '../settings/app_settings.dart';
 import 'curriculum_setup_screen.dart';
 
-class FlmLoginScreen
-    extends StatefulWidget {
-  const FlmLoginScreen({
-    super.key,
-  });
+class FlmLoginScreen extends StatefulWidget {
+  const FlmLoginScreen({super.key});
 
   @override
-  State<FlmLoginScreen> createState() =>
-      _FlmLoginScreenState();
+  State<FlmLoginScreen> createState() => _FlmLoginScreenState();
 }
 
-class _FlmLoginScreenState
-    extends State<FlmLoginScreen> {
-  final FlmSession _session =
-      FlmSession.instance;
+class _FlmLoginScreenState extends State<FlmLoginScreen> {
+  final FlmSession _session = FlmSession.instance;
 
-  final AppSettings _settings =
-      AppSettings.instance;
+  final AppSettings _settings = AppSettings.instance;
 
-  StreamSubscription<LoadingState>?
-      _loadingSubscription;
+  StreamSubscription<LoadingState>? _loadingSubscription;
 
   bool _initializing = true;
   bool _pageLoading = true;
-  bool _keepMeSignedIn = false;
   bool _navigatingAway = false;
 
   String? _error;
@@ -45,55 +36,26 @@ class _FlmLoginScreenState
 
   Future<void> _initialize() async {
     try {
-      final keepSignedIn =
-          await _settings
-              .getKeepMeSignedIn();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _keepMeSignedIn =
-            keepSignedIn;
-      });
+      // Authentication is retained automatically on this device.
+      await _settings.setKeepMeSignedIn(true);
 
       await _session.initialize();
 
-      // If user did NOT ask us to remember authentication,
-      // remove the browser session before showing FLM.
-      if (!keepSignedIn) {
-        await _session.controller
-            .clearCookies();
+      await _loadingSubscription?.cancel();
 
-        await _session.controller
-            .clearCache();
-      }
+      _loadingSubscription = _session.controller.loadingState.listen((state) {
+        if (!mounted) {
+          return;
+        }
 
-      await _loadingSubscription
-          ?.cancel();
+        setState(() {
+          _pageLoading = state == LoadingState.loading;
+        });
 
-      _loadingSubscription =
-          _session.controller.loadingState
-              .listen(
-        (state) {
-          if (!mounted) {
-            return;
-          }
-
-          setState(() {
-            _pageLoading =
-                state ==
-                    LoadingState.loading;
-          });
-
-          if (state ==
-              LoadingState
-                  .navigationCompleted) {
-            _checkLogin();
-          }
-        },
-      );
+        if (state == LoadingState.navigationCompleted) {
+          _checkLogin();
+        }
+      });
 
       await _session.openLoginPage();
 
@@ -115,8 +77,7 @@ class _FlmLoginScreenState
 
       setState(() {
         _initializing = false;
-        _error =
-            error.toString();
+        _error = error.toString();
       });
     }
   }
@@ -126,45 +87,22 @@ class _FlmLoginScreenState
       return;
     }
 
-    final loggedIn =
-        await _session
-            .checkLoginSuccess();
+    final loggedIn = await _session.checkLoginSuccess();
 
-    if (!loggedIn ||
-        !mounted ||
-        _navigatingAway) {
+    if (!loggedIn || !mounted || _navigatingAway) {
       return;
     }
 
     _navigatingAway = true;
 
-    Navigator.of(context)
-        .pushReplacement(
-      MaterialPageRoute(
-        builder: (_) =>
-            const CurriculumSetupScreen(),
-      ),
-    );
-  }
-
-  Future<void>
-      _changeKeepSignedIn(
-    bool value,
-  ) async {
-    setState(() {
-      _keepMeSignedIn = value;
-    });
-
-    await _settings
-        .setKeepMeSignedIn(
-      value,
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const CurriculumSetupScreen()),
     );
   }
 
   @override
   void dispose() {
-    _loadingSubscription
-        ?.cancel();
+    _loadingSubscription?.cancel();
 
     // DO NOT dispose FlmSession's WebView controller.
     // The authenticated controller is intentionally
@@ -174,84 +112,28 @@ class _FlmLoginScreenState
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Login to FPT FLM',
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2937),
+        surfaceTintColor: Colors.transparent,
+        shadowColor: const Color(0x1A0F172A),
+        elevation: 1,
+        iconTheme: const IconThemeData(color: Color(0xFF334155)),
+        titleTextStyle: const TextStyle(
+          color: Color(0xFF1F2937),
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
         ),
+        title: const Text('Login to FPT FLM'),
       ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 12,
-            ),
-            child: Row(
-              children: [
-                Checkbox(
-                  value:
-                      _keepMeSignedIn,
-                  onChanged:
-                      _initializing
-                          ? null
-                          : (value) {
-                              _changeKeepSignedIn(
-                                value ??
-                                    false,
-                              );
-                            },
-                ),
+          if (_pageLoading && !_initializing) const LinearProgressIndicator(),
 
-                const SizedBox(
-                  width: 6,
-                ),
-
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
-                    children: [
-                      Text(
-                        'Keep me signed in on this device',
-                        style: TextStyle(
-                          fontWeight:
-                              FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(
-                        height: 2,
-                      ),
-                      Text(
-                        'Do not enable this on a shared computer.',
-                        style: TextStyle(
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Divider(
-            height: 1,
-          ),
-
-          if (_pageLoading &&
-              !_initializing)
-            const LinearProgressIndicator(),
-
-          Expanded(
-            child: _buildContent(),
-          ),
+          Expanded(child: _buildContent()),
         ],
       ),
     );
@@ -259,55 +141,42 @@ class _FlmLoginScreenState
 
   Widget _buildContent() {
     if (_initializing) {
-      return const Center(
-        child:
-            CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
       return Center(
         child: Padding(
-          padding:
-              const EdgeInsets.all(
-            32,
-          ),
+          padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(
                 Icons.error_outline,
                 size: 42,
+                color: Color(0xFFEF4444),
               ),
 
-              const SizedBox(
-                height: 16,
-              ),
+              const SizedBox(height: 16),
 
               Text(
                 'Could not start FLM login.\n\n$_error',
-                textAlign:
-                    TextAlign.center,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF334155)),
               ),
 
-              const SizedBox(
-                height: 20,
-              ),
+              const SizedBox(height: 20),
 
               FilledButton(
                 onPressed: () {
                   setState(() {
-                    _initializing =
-                        true;
+                    _initializing = true;
                     _error = null;
                   });
 
                   _initialize();
                 },
-                child: const Text(
-                  'Retry',
-                ),
+                child: const Text('Retry'),
               ),
             ],
           ),
@@ -315,8 +184,6 @@ class _FlmLoginScreenState
       );
     }
 
-    return Webview(
-      _session.controller,
-    );
+    return Webview(_session.controller);
   }
 }

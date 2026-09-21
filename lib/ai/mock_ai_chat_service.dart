@@ -5,11 +5,11 @@ import 'question_intent_builder.dart';
 import 'study_intent.dart';
 
 class MockAiChatService implements AiChatService {
-  final QuestionIntentBuilder _intentBuilder;
+  final QuestionIntentBuilder intentBuilder;
 
   const MockAiChatService({
-    QuestionIntentBuilder intentBuilder = const QuestionIntentBuilder(),
-  }) : _intentBuilder = intentBuilder;
+    this.intentBuilder = const QuestionIntentBuilder(),
+  });
 
   @override
   Future<AiChatResponse> ask(AiChatRequest request) async {
@@ -18,7 +18,7 @@ class MockAiChatService implements AiChatService {
     final noteHint = request.usesObsidianNotes
         ? '\n\nMình cũng đã dùng nội dung trong `My Notes.md` của bạn làm ngữ cảnh.'
         : '';
-    final intent = _intentBuilder.detect(request.question);
+    final intent = intentBuilder.detect(request.question);
     final answer = switch (intent) {
       StudyIntent.quiz => _quizAnswer(request),
       StudyIntent.assessment => _assessmentAnswer(request, noteHint),

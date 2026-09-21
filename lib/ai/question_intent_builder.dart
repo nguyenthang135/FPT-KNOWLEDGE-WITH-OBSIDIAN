@@ -69,6 +69,8 @@ class QuestionIntentBuilder {
       'phan biet',
       'khác nhau',
       'khac nhau',
+      'khác',
+      'khac',
     ])) {
       return StudyIntent.comparison;
     }

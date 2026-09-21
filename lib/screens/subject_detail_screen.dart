@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../ai/widgets/ai_assistant_dialog.dart';
+import '../ai/widgets/ai_floating_button.dart';
+import '../design_system/fpt_loading.dart';
 import '../flm/flm_syllabus_service.dart';
 import '../models/curriculum_subject.dart';
 
@@ -36,11 +38,17 @@ class _SubjectDetailScreenState
   }
 
   Future<void> _load() async {
+    final startTime = DateTime.now();
     try {
-      final syllabus =
-          await _service.loadExactSyllabus(
+      final syllabus = await _service.loadExactSyllabus(
         widget.subject.code,
       );
+
+      final elapsed = DateTime.now().difference(startTime);
+      const minDuration = Duration(milliseconds: 3800);
+      if (elapsed < minDuration) {
+        await Future.delayed(minDuration - elapsed);
+      }
 
       if (!mounted) return;
 
@@ -49,6 +57,12 @@ class _SubjectDetailScreenState
         _loading = false;
       });
     } catch (error) {
+      final elapsed = DateTime.now().difference(startTime);
+      const minDuration = Duration(milliseconds: 3000);
+      if (elapsed < minDuration) {
+        await Future.delayed(minDuration - elapsed);
+      }
+
       if (!mounted) return;
 
       setState(() {
@@ -63,26 +77,11 @@ class _SubjectDetailScreenState
     if (_loading) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(
-            widget.subject.code,
-          ),
+          title: Text(widget.subject.code),
         ),
-        body: Center(
-          child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-
-              const SizedBox(
-                height: 16,
-              ),
-
-              Text(
-                'Loading ${widget.subject.code}...',
-              ),
-            ],
-          ),
+        body: FptTechLoading(
+          title: widget.subject.code,
+          subtitle: 'Loading subject syllabus & knowledge graph from FLM...',
         ),
       );
     }
@@ -209,25 +208,6 @@ class _SubjectDetailScreenState
                   ),
                 ),
             ],
-          ),
-
-          const SizedBox(
-            height: 20,
-          ),
-
-          FilledButton.icon(
-            onPressed: () {
-              showDialog<void>(
-                context: context,
-                builder: (_) => AiAssistantDialog(
-                  curriculumCode: widget.curriculumCode,
-                  subject: widget.subject,
-                  syllabus: syllabus,
-                ),
-              );
-            },
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Trợ lý AI'),
           ),
 
           if (syllabus
@@ -392,6 +372,19 @@ class _SubjectDetailScreenState
             height: 40,
           ),
         ],
+      ),
+      floatingActionButton: AiFloatingButton(
+        tooltip: 'Hỏi Trợ lý AI (${widget.subject.code})',
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (_) => AiAssistantDialog(
+              curriculumCode: widget.curriculumCode,
+              subject: widget.subject,
+              syllabus: syllabus,
+            ),
+          );
+        },
       ),
     );
   }

@@ -7,21 +7,17 @@ import 'question_intent_builder.dart';
 import 'response_format_builder.dart';
 
 class AiPromptBuilder {
-  final QuestionIntentBuilder _intentBuilder;
-  final ResponseFormatBuilder _responseFormatBuilder;
-  final ObsidianContextBuilder _obsidianContextBuilder;
-  final QuestionGuardBuilder _questionGuardBuilder;
+  final QuestionIntentBuilder intentBuilder;
+  final ResponseFormatBuilder responseFormatBuilder;
+  final ObsidianContextBuilder obsidianContextBuilder;
+  final QuestionGuardBuilder questionGuardBuilder;
 
   const AiPromptBuilder({
-    QuestionIntentBuilder intentBuilder = const QuestionIntentBuilder(),
-    ResponseFormatBuilder responseFormatBuilder = const ResponseFormatBuilder(),
-    ObsidianContextBuilder obsidianContextBuilder =
-        const ObsidianContextBuilder(),
-    QuestionGuardBuilder questionGuardBuilder = const QuestionGuardBuilder(),
-  }) : _intentBuilder = intentBuilder,
-       _responseFormatBuilder = responseFormatBuilder,
-       _obsidianContextBuilder = obsidianContextBuilder,
-       _questionGuardBuilder = questionGuardBuilder;
+    this.intentBuilder = const QuestionIntentBuilder(),
+    this.responseFormatBuilder = const ResponseFormatBuilder(),
+    this.obsidianContextBuilder = const ObsidianContextBuilder(),
+    this.questionGuardBuilder = const QuestionGuardBuilder(),
+  });
 
   String buildSyllabusContext({
     required CurriculumSubject subject,
@@ -73,10 +69,10 @@ class AiPromptBuilder {
   }
 
   String buildPrompt(AiChatRequest request) {
-    final intent = _intentBuilder.detect(request.question);
-    final format = _responseFormatBuilder.build(intent);
-    final obsidianContext = _obsidianContextBuilder.build(request);
-    final guard = _questionGuardBuilder.build(
+    final intent = intentBuilder.detect(request.question);
+    final format = responseFormatBuilder.build(intent);
+    final obsidianContext = obsidianContextBuilder.build(request);
+    final guard = questionGuardBuilder.build(
       question: request.question,
       intent: intent,
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design_system/fpt_loading.dart';
 import '../flm/flm_combo_service.dart';
 
 class ComboSelectionScreen
@@ -114,9 +115,9 @@ class _ComboSelectionScreenState
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child:
-            CircularProgressIndicator(),
+      return const FptTechLoading(
+        title: 'Combo Electives',
+        subtitle: 'Fetching elective subjects and paths from FLM...',
       );
     }
 
