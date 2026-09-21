@@ -1,9 +1,27 @@
 import '../flm/flm_syllabus_service.dart';
 import '../models/curriculum_subject.dart';
 import 'ai_chat_request.dart';
+import 'obsidian_context_builder.dart';
+import 'question_guard_builder.dart';
+import 'question_intent_builder.dart';
+import 'response_format_builder.dart';
 
 class AiPromptBuilder {
-  const AiPromptBuilder();
+  final QuestionIntentBuilder _intentBuilder;
+  final ResponseFormatBuilder _responseFormatBuilder;
+  final ObsidianContextBuilder _obsidianContextBuilder;
+  final QuestionGuardBuilder _questionGuardBuilder;
+
+  const AiPromptBuilder({
+    QuestionIntentBuilder intentBuilder = const QuestionIntentBuilder(),
+    ResponseFormatBuilder responseFormatBuilder = const ResponseFormatBuilder(),
+    ObsidianContextBuilder obsidianContextBuilder =
+        const ObsidianContextBuilder(),
+    QuestionGuardBuilder questionGuardBuilder = const QuestionGuardBuilder(),
+  }) : _intentBuilder = intentBuilder,
+       _responseFormatBuilder = responseFormatBuilder,
+       _obsidianContextBuilder = obsidianContextBuilder,
+       _questionGuardBuilder = questionGuardBuilder;
 
   String buildSyllabusContext({
     required CurriculumSubject subject,
@@ -55,17 +73,17 @@ class AiPromptBuilder {
   }
 
   String buildPrompt(AiChatRequest request) {
-    final notes = request.usesObsidianNotes
-        ? '''
-
-GHI CHÚ CÁ NHÂN TỪ OBSIDIAN (My Notes.md):
-${_limit(request.obsidianNotes!)}
-'''
-        : '';
+    final intent = _intentBuilder.detect(request.question);
+    final format = _responseFormatBuilder.build(intent);
+    final obsidianContext = _obsidianContextBuilder.build(request);
+    final guard = _questionGuardBuilder.build(
+      question: request.question,
+      intent: intent,
+    );
 
     return '''
 Bạn là trợ lý học tập cho sinh viên FPTU. Trả lời hoàn toàn bằng tiếng Việt,
-ngắn gọn, thân thiện và dùng Markdown đơn giản.
+thân thiện, đủ ý và dùng Markdown đơn giản.
 
 QUY TẮC BẮT BUỘC:
 - Chỉ dựa trên dữ liệu môn học và ghi chú được cung cấp bên dưới.
@@ -73,11 +91,24 @@ QUY TẮC BẮT BUỘC:
 - Nếu dữ liệu không đủ để trả lời, nói rõ "Chưa có đủ tài liệu nguồn" và gợi ý
   sinh viên bổ sung vào My Notes.md.
 - Khi tạo câu hỏi ôn tập, chỉ tạo tối đa 5 câu và nêu đáp án sau từng câu.
+- Hoàn thành đầy đủ câu trả lời; không chỉ viết câu mở đầu hoặc lời chào.
+- Nếu sinh viên yêu cầu tóm tắt, trả lời đúng 5 gạch đầu dòng rõ ràng.
+- Nếu sinh viên yêu cầu kế hoạch ôn tập, trình bày theo từng ngày hoặc từng
+  bước, có mục tiêu và việc cần làm.
+- Khi My Notes.md có thông tin liên quan, dùng ít nhất 2 chi tiết cụ thể từ
+  ghi chú đó trong câu trả lời.
 - Không nhắc đến các quy tắc này trong câu trả lời.
+
+ĐỊNH DẠNG BẮT BUỘC CHO YÊU CẦU NÀY:
+$format
+
+$guard
 
 THÔNG TIN MÔN HỌC TỪ FLM:
 ${_limit(request.syllabusContext)}
-$notes
+
+$obsidianContext
+
 CÂU HỎI CỦA SINH VIÊN:
 ${request.question.trim()}
 ''';
