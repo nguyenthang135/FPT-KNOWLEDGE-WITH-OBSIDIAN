@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../flm/flm_combo_service.dart';
@@ -5,6 +6,10 @@ import '../flm/flm_session.dart';
 import '../models/curriculum_subject.dart';
 import '../obsidian/obsidian_service.dart';
 import '../settings/app_settings.dart';
+import '../design_system/app_shell.dart';
+import '../design_system/app_theme.dart';
+import '../design_system/app_widgets.dart';
+import '../design_system/fpt_loading.dart';
 import 'combo_selection_screen.dart';
 import 'flm_login_screen.dart';
 import 'subject_detail_screen.dart';
@@ -12,18 +17,14 @@ import 'subject_detail_screen.dart';
 class CurriculumOverviewScreen extends StatefulWidget {
   final String curriculumCode;
 
-  const CurriculumOverviewScreen({
-    super.key,
-    required this.curriculumCode,
-  });
+  const CurriculumOverviewScreen({super.key, required this.curriculumCode});
 
   @override
   State<CurriculumOverviewScreen> createState() =>
       _CurriculumOverviewScreenState();
 }
 
-class _CurriculumOverviewScreenState
-    extends State<CurriculumOverviewScreen> {
+class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
   bool _loading = true;
   bool _loggingOut = false;
   bool _exportingObsidian = false;
@@ -34,14 +35,14 @@ class _CurriculumOverviewScreenState
 
   SpecializationCombo? _selectedCombo;
 
-  final ObsidianService _obsidianService =
-      ObsidianService();
+  final ObsidianService _obsidianService = ObsidianService();
 
   String? _connectedVaultPath;
 
   int _exportCurrent = 0;
   int _exportTotal = 0;
   String _exportMessage = '';
+  DateTime? _lastSync;
 
   @override
   void initState() {
@@ -52,8 +53,7 @@ class _CurriculumOverviewScreenState
   }
 
   Future<void> _restoreVault() async {
-    final path =
-        await _obsidianService.getSavedVaultPath();
+    final path = await _obsidianService.getSavedVaultPath();
 
     if (!mounted) {
       return;
@@ -65,9 +65,15 @@ class _CurriculumOverviewScreenState
   }
 
   Future<void> _loadSubjects() async {
+    final startTime = DateTime.now();
     try {
-      final subjects =
-          await FlmSession.instance.getCurriculumSubjects();
+      final subjects = await FlmSession.instance.getCurriculumSubjects();
+
+      final elapsed = DateTime.now().difference(startTime);
+      const minDuration = Duration(milliseconds: 3500);
+      if (elapsed < minDuration) {
+        await Future.delayed(minDuration - elapsed);
+      }
 
       if (!mounted) {
         return;
@@ -78,6 +84,12 @@ class _CurriculumOverviewScreenState
         _loading = false;
       });
     } catch (error) {
+      final elapsed = DateTime.now().difference(startTime);
+      const minDuration = Duration(milliseconds: 2500);
+      if (elapsed < minDuration) {
+        await Future.delayed(minDuration - elapsed);
+      }
+
       if (!mounted) {
         return;
       }
@@ -90,13 +102,45 @@ class _CurriculumOverviewScreenState
   }
 
   Future<void> _chooseSpecialization() async {
-    final combo =
-        await Navigator.of(context).push<SpecializationCombo>(
-      MaterialPageRoute(
-        builder: (_) => ComboSelectionScreen(
-          curriculumCode: widget.curriculumCode,
-        ),
-      ),
+    final combo = await showGeneralDialog<SpecializationCombo>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close specialization panel',
+      barrierColor: const Color(0x660F172A),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, _, _) {
+        final width = MediaQuery.sizeOf(dialogContext).width;
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: width < 600 ? width : 520,
+              height: double.infinity,
+              child: Material(
+                color: AppColors.surface,
+                elevation: 18,
+                child: ComboSelectionScreen(
+                  curriculumCode: widget.curriculumCode,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        );
+      },
     );
 
     if (combo == null || !mounted) {
@@ -121,9 +165,7 @@ class _CurriculumOverviewScreenState
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text(
-            'Choose specialization first',
-          ),
+          title: const Text('Choose specialization first'),
           content: const Text(
             'This curriculum contains specialization subjects. '
             'Choose your specialization before syncing so the '
@@ -132,25 +174,15 @@ class _CurriculumOverviewScreenState
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(
-                  context,
-                  false,
-                );
+                Navigator.pop(context, false);
               },
-              child: const Text(
-                'Cancel',
-              ),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.pop(
-                  context,
-                  true,
-                );
+                Navigator.pop(context, true);
               },
-              child: const Text(
-                'Choose specialization',
-              ),
+              child: const Text('Choose specialization'),
             ),
           ],
         );
@@ -166,15 +198,12 @@ class _CurriculumOverviewScreenState
     return _selectedCombo != null;
   }
 
-  Future<void> _exportToObsidian({
-    bool chooseNewVault = false,
-  }) async {
+  Future<void> _exportToObsidian({bool chooseNewVault = false}) async {
     if (_exportingObsidian) {
       return;
     }
 
-    final ready =
-        await _ensureSpecializationSelected();
+    final ready = await _ensureSpecializationSelected();
 
     if (!ready || !mounted) {
       return;
@@ -188,22 +217,17 @@ class _CurriculumOverviewScreenState
       _exportMessage = chooseNewVault
           ? 'Choose a new folder...'
           : _connectedVaultPath == null
-              ? 'Choose your knowledge folder...'
-              : 'Preparing FLM sync...';
+          ? 'Choose your knowledge folder...'
+          : 'Preparing FLM sync...';
     });
 
     try {
-      final result =
-          await _obsidianService.exportCurriculum(
+      final result = await _obsidianService.exportCurriculum(
         curriculumCode: widget.curriculumCode,
         curriculumSubjects: _subjects,
         specialization: _selectedCombo,
         chooseNewVault: chooseNewVault,
-        onProgress: (
-          current,
-          total,
-          message,
-        ) {
+        onProgress: (current, total, message) {
           if (!mounted) {
             return;
           }
@@ -221,32 +245,27 @@ class _CurriculumOverviewScreenState
       }
 
       setState(() {
-        _connectedVaultPath =
-            result.vaultPath;
+        _connectedVaultPath = result.vaultPath;
+        _lastSync = DateTime.now();
       });
 
       await showDialog<void>(
         context: context,
         builder: (context) {
           return AlertDialog(
-            title: const Text(
-              'Sync complete',
-            ),
+            title: const Text('Sync complete'),
             content: SizedBox(
               width: 520,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Generated ${result.exportedSubjects} '
                     'subject folders.',
                   ),
 
-                  const SizedBox(
-                    height: 12,
-                  ),
+                  const SizedBox(height: 12),
 
                   Text(
                     'Curriculum saved at:\n'
@@ -254,32 +273,20 @@ class _CurriculumOverviewScreenState
                   ),
 
                   if (result.failedSubjects.isNotEmpty) ...[
-                    const SizedBox(
-                      height: 16,
-                    ),
+                    const SizedBox(height: 16),
                     Text(
                       '${result.failedSubjects.length} subject(s) '
                       'could not provide detailed FLM syllabus data:',
                     ),
-                    const SizedBox(
-                      height: 6,
-                    ),
-                    Text(
-                      result.failedSubjects.join(', '),
-                    ),
+                    const SizedBox(height: 6),
+                    Text(result.failedSubjects.join(', ')),
                   ],
 
-                  const SizedBox(
-                    height: 16,
-                  ),
+                  const SizedBox(height: 16),
 
-                  const Text(
-                    'Your My Notes.md files were preserved.',
-                  ),
+                  const Text('Your My Notes.md files were preserved.'),
 
-                  const SizedBox(
-                    height: 12,
-                  ),
+                  const SizedBox(height: 12),
 
                   const Text(
                     'Open this folder yourself in Obsidian whenever you want to study.',
@@ -290,13 +297,9 @@ class _CurriculumOverviewScreenState
             actions: [
               FilledButton(
                 onPressed: () {
-                  Navigator.pop(
-                    context,
-                  );
+                  Navigator.pop(context);
                 },
-                child: const Text(
-                  'Done',
-                ),
+                child: const Text('Done'),
               ),
             ],
           );
@@ -307,13 +310,9 @@ class _CurriculumOverviewScreenState
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Sync failed: $error',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Sync failed: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -323,15 +322,32 @@ class _CurriculumOverviewScreenState
     }
   }
 
+  Future<void> _openFolder() async {
+    final path = _connectedVaultPath;
+    if (path == null) return;
+    try {
+      await Process.start('explorer.exe', [
+        path,
+      ], mode: ProcessStartMode.detached);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open folder: $error')),
+        );
+      }
+    }
+  }
+
   Future<void> _logout() async {
-    final confirmed =
-        await showDialog<bool>(
+    if (_loggingOut || _exportingObsidian) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text(
-            'Logout?',
-          ),
+          title: const Text('Logout?'),
           content: const Text(
             'This signs out of FLM and Google inside FPT Knowledge. '
             'Your curriculum history and saved knowledge folder remain.',
@@ -339,25 +355,15 @@ class _CurriculumOverviewScreenState
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(
-                  context,
-                  false,
-                );
+                Navigator.pop(context, false);
               },
-              child: const Text(
-                'Cancel',
-              ),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.pop(
-                  context,
-                  true,
-                );
+                Navigator.pop(context, true);
               },
-              child: const Text(
-                'Logout',
-              ),
+              child: const Text('Logout'),
             ),
           ],
         );
@@ -373,9 +379,7 @@ class _CurriculumOverviewScreenState
     });
 
     try {
-      await AppSettings.instance.setKeepMeSignedIn(
-        false,
-      );
+      await AppSettings.instance.setKeepMeSignedIn(false);
 
       await FlmSession.instance.logout();
 
@@ -384,10 +388,7 @@ class _CurriculumOverviewScreenState
       }
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) =>
-              const FlmLoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const FlmLoginScreen()),
         (route) => false,
       );
     } catch (error) {
@@ -399,24 +400,19 @@ class _CurriculumOverviewScreenState
         _loggingOut = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Logout failed: $error',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Logout failed: $error')));
     }
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
+      return Scaffold(
+        body: FptTechLoading(
+          title: widget.curriculumCode,
+          subtitle: 'Syncing curriculum structure from FPT FLM...',
         ),
       );
     }
@@ -434,173 +430,206 @@ class _CurriculumOverviewScreenState
     }
 
     final normalSubjects = _subjects
-        .where(
-          (subject) =>
-              !subject.isComboPlaceholder,
-        )
+        .where((subject) => !subject.isComboPlaceholder)
         .toList();
 
     final comboPlaceholders = _subjects
-        .where(
-          (subject) =>
-              subject.isComboPlaceholder,
-        )
+        .where((subject) => subject.isComboPlaceholder)
         .toList();
 
     final semesters = <int>{};
 
     for (final subject in normalSubjects) {
-      semesters.add(
-        subject.semester,
-      );
+      semesters.add(subject.semester);
     }
 
-    for (final placeholder
-        in comboPlaceholders) {
-      semesters.add(
-        placeholder.semester,
-      );
+    for (final placeholder in comboPlaceholders) {
+      semesters.add(placeholder.semester);
     }
 
     if (_selectedCombo != null) {
-      for (final subject
-          in _selectedCombo!.subjects) {
-        semesters.add(
-          subject.semester,
-        );
+      for (final subject in _selectedCombo!.subjects) {
+        semesters.add(subject.semester);
       }
     }
 
-    final semesterNumbers =
-        semesters.toList()..sort();
+    final semesterNumbers = semesters.toList()..sort();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.curriculumCode,
-        ),
-        actions: [
-          Tooltip(
-            message:
-                'Logout / Switch account',
-            child: IconButton(
-              onPressed:
-                  _loggingOut ||
-                          _exportingObsidian
-                      ? null
-                      : _logout,
-              icon: _loggingOut
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child:
-                          CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.logout,
-                    ),
-            ),
-          ),
-          const SizedBox(
-            width: 8,
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
+    final parts = widget.curriculumCode.split('_');
+    final program = parts.length > 1
+        ? parts.take(parts.length - 1).join('_')
+        : widget.curriculumCode;
+    final intake = parts.length > 1 ? parts.last : '—';
+    final credits = normalSubjects.fold<int>(
+      0,
+      (sum, item) => sum + item.credits,
+    );
+
+    return AppShell(
+      title: 'Curriculum',
+      selectedIndex: 1,
+      onLogout: _logout,
+      isLoggingOut: _loggingOut,
+      child: ListView(
         children: [
-          Text(
-            'Curriculum Overview',
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium,
-          ),
-
-          const SizedBox(
-            height: 8,
-          ),
-
-          Text(
-            '${_subjects.length} curriculum slots',
-          ),
-
-          const SizedBox(
-            height: 24,
-          ),
-
-          _KnowledgeFolderCard(
-            exporting:
-                _exportingObsidian,
-            folderPath:
-                _connectedVaultPath,
-            current:
-                _exportCurrent,
-            total:
-                _exportTotal,
-            message:
-                _exportMessage,
-            onSync: () {
-              _exportToObsidian();
-            },
-            onChangeFolder: () {
-              _exportToObsidian(
-                chooseNewVault: true,
-              );
-            },
-          ),
-
-          const SizedBox(
-            height: 24,
-          ),
-
-          for (final semester
-              in semesterNumbers) ...[
-            _SemesterCard(
-              semester: semester,
-              normalSubjects:
-                  normalSubjects
-                      .where(
-                        (subject) =>
-                            subject.semester ==
-                            semester,
-                      )
-                      .toList(),
-              comboPlaceholders:
-                  comboPlaceholders
-                      .where(
-                        (subject) =>
-                            subject.semester ==
-                            semester,
-                      )
-                      .toList(),
-              selectedCombo:
-                  _selectedCombo,
+          MaxWidthContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  spacing: 20,
+                  runSpacing: 16,
+                  children: [
+                    const SizedBox(
+                      width: 700,
+                      child: PageHeading(
+                        eyebrow: 'Curriculum workspace',
+                        title: 'Curriculum overview',
+                        subtitle:
+                            'Review your study path and keep your Obsidian knowledge workspace in sync.',
+                      ),
+                    ),
+                    if (comboPlaceholders.isNotEmpty)
+                      SecondaryButton(
+                        label: _selectedCombo == null
+                            ? 'Choose specialization'
+                            : 'Change specialization',
+                        icon: _selectedCombo == null
+                            ? Icons.route_outlined
+                            : Icons.edit_outlined,
+                        onPressed: _chooseSpecialization,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _HeaderStat(
+                      label: 'CURRICULUM',
+                      value: widget.curriculumCode,
+                      mono: true,
+                    ),
+                    _HeaderStat(label: 'PROGRAM', value: program),
+                    _HeaderStat(label: 'INTAKE', value: intake),
+                    _HeaderStat(
+                      label: 'SUBJECTS',
+                      value: '${normalSubjects.length}',
+                    ),
+                    _HeaderStat(
+                      label: 'SEMESTERS',
+                      value: '${semesterNumbers.length}',
+                    ),
+                    if (credits > 0)
+                      _HeaderStat(label: 'CREDITS', value: '$credits'),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                _KnowledgeFolderCard(
+                  exporting: _exportingObsidian,
+                  folderPath: _connectedVaultPath,
+                  current: _exportCurrent,
+                  total: _exportTotal,
+                  message: _exportMessage,
+                  lastSync: _lastSync,
+                  onSync: _exportToObsidian,
+                  onOpenFolder: _openFolder,
+                  onChangeFolder: () => _exportToObsidian(chooseNewVault: true),
+                ),
+                const SizedBox(height: 30),
+                if (_selectedCombo != null) ...[
+                  _SpecializationCard(combo: _selectedCombo!),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Study plan',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    Text(
+                      '${semesterNumbers.length} semesters',
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                for (final semester in semesterNumbers)
+                  _SemesterCard(
+                    curriculumCode: widget.curriculumCode,
+                    semester: semester,
+                    normalSubjects: normalSubjects
+                        .where((subject) => subject.semester == semester)
+                        .toList(),
+                    comboPlaceholders: comboPlaceholders
+                        .where((subject) => subject.semester == semester)
+                        .toList(),
+                    selectedCombo: _selectedCombo,
+                  ),
+              ],
             ),
-
-            if (semester == 4)
-              _SpecializationCard(
-                combo:
-                    _selectedCombo,
-                onChoose:
-                    _chooseSpecialization,
-              ),
-          ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _KnowledgeFolderCard
-    extends StatelessWidget {
+class _HeaderStat extends StatelessWidget {
+  const _HeaderStat({
+    required this.label,
+    required this.value,
+    this.mono = false,
+  });
+  final String label, value;
+  final bool mono;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$label  ',
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: .7,
+          ),
+        ),
+        Text(
+          value,
+          style: (mono ? monoStyle : const TextStyle()).copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _KnowledgeFolderCard extends StatelessWidget {
   final bool exporting;
   final String? folderPath;
   final int current;
   final int total;
   final String message;
+  final DateTime? lastSync;
   final VoidCallback onSync;
+  final VoidCallback onOpenFolder;
   final VoidCallback onChangeFolder;
 
   const _KnowledgeFolderCard({
@@ -609,140 +638,134 @@ class _KnowledgeFolderCard
     required this.current,
     required this.total,
     required this.message,
+    required this.lastSync,
     required this.onSync,
+    required this.onOpenFolder,
     required this.onChangeFolder,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     double? progress;
 
     if (exporting && total > 0) {
-      progress =
-          current / total;
+      progress = current / total;
     }
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(
-                  Icons.folder_copy_outlined,
-                  size: 34,
+                  Icons.hub_outlined,
+                  size: 30,
+                  color: AppColors.purple,
                 ),
 
-                const SizedBox(
-                  width: 16,
-                ),
+                const SizedBox(width: 16),
 
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        folderPath == null
-                            ? 'Knowledge folder'
-                            : 'Knowledge folder connected',
-                        style:
-                            const TextStyle(
+                        'Knowledge workspace',
+                        style: const TextStyle(
                           fontSize: 19,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
 
-                      const SizedBox(
-                        height: 5,
-                      ),
+                      const SizedBox(height: 5),
 
                       if (folderPath == null)
                         const Text(
-                          'Choose where FPT Knowledge should '
-                          'generate your Markdown files.',
+                          'Connect an Obsidian vault to generate and synchronize your study notes.',
                         )
                       else
                         Text(
                           folderPath!,
+                          style: monoStyle.copyWith(fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                     ],
                   ),
                 ),
 
-                const SizedBox(
-                  width: 16,
-                ),
-
-                if (folderPath != null)
-                  TextButton.icon(
-                    onPressed:
-                        exporting
-                            ? null
-                            : onChangeFolder,
-                    icon: const Icon(
-                      Icons.folder_open,
-                    ),
-                    label: const Text(
-                      'Change folder',
-                    ),
-                  ),
-
-                if (folderPath != null)
-                  const SizedBox(
-                    width: 8,
-                  ),
-
-                FilledButton.icon(
-                  onPressed:
-                      exporting
-                          ? null
-                          : onSync,
-                  icon: exporting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.sync,
-                        ),
-                  label: Text(
-                    folderPath == null
-                        ? 'Choose folder & sync'
-                        : 'Sync with FLM',
-                  ),
-                ),
+                const SizedBox(width: 16),
               ],
             ),
 
+            const SizedBox(height: 18),
+            if (folderPath == null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PrimaryButton(
+                  label: 'Connect folder',
+                  icon: Icons.add_link,
+                  loading: exporting,
+                  onPressed: onChangeFolder,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Text(
+                    exporting ? 'Synchronizing' : 'Connected',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                  Text(
+                    lastSync == null
+                        ? 'Not synced yet'
+                        : 'Last sync ${lastSync!.hour.toString().padLeft(2, '0')}:${lastSync!.minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  GhostButton(
+                    label: 'Change',
+                    icon: Icons.drive_folder_upload_outlined,
+                    onPressed: exporting ? null : onChangeFolder,
+                  ),
+                  SecondaryButton(
+                    label: 'Open folder',
+                    icon: Icons.folder_open_outlined,
+                    onPressed: exporting ? null : onOpenFolder,
+                  ),
+                  PrimaryButton(
+                    label: 'Sync now',
+                    icon: Icons.sync,
+                    loading: exporting,
+                    onPressed: onSync,
+                  ),
+                ],
+              ),
+
             if (exporting) ...[
-              const SizedBox(
-                height: 18,
-              ),
+              const SizedBox(height: 18),
 
-              LinearProgressIndicator(
-                value: progress,
-              ),
+              LinearProgressIndicator(value: progress),
 
-              const SizedBox(
-                height: 8,
-              ),
+              const SizedBox(height: 8),
 
-              Text(
-                total > 0
-                    ? '$current / $total — $message'
-                    : message,
-              ),
+              Text(total > 0 ? '$current / $total — $message' : message),
             ],
           ],
         ),
@@ -751,20 +774,19 @@ class _KnowledgeFolderCard
   }
 }
 
-class _SemesterCard
-    extends StatelessWidget {
+class _SemesterCard extends StatelessWidget {
+  final String curriculumCode;
+
   final int semester;
 
-  final List<CurriculumSubject>
-      normalSubjects;
+  final List<CurriculumSubject> normalSubjects;
 
-  final List<CurriculumSubject>
-      comboPlaceholders;
+  final List<CurriculumSubject> comboPlaceholders;
 
-  final SpecializationCombo?
-      selectedCombo;
+  final SpecializationCombo? selectedCombo;
 
   const _SemesterCard({
+    required this.curriculumCode,
     required this.semester,
     required this.normalSubjects,
     required this.comboPlaceholders,
@@ -772,68 +794,36 @@ class _SemesterCard
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     final comboSubjects =
         selectedCombo?.subjects
-                .where(
-                  (subject) =>
-                      subject.semester ==
-                      semester,
-                )
-                .toList() ??
-            [];
+            .where((subject) => subject.semester == semester)
+            .toList() ??
+        [];
+    final totalCredits = normalSubjects.fold<int>(
+      0,
+      (sum, subject) => sum + subject.credits,
+    );
 
     return Card(
-      margin: const EdgeInsets.only(
-        bottom: 14,
-      ),
+      margin: const EdgeInsets.only(bottom: 14),
       child: ExpansionTile(
-        initiallyExpanded:
-            semester == 1,
+        initiallyExpanded: semester == 1,
         title: Text(
-          semester == 0
-              ? 'Preparation / Semester 0'
-              : 'Semester $semester',
+          semester == 0 ? 'Preparation / Semester 0' : 'Semester $semester',
         ),
         subtitle: Text(
-          '${normalSubjects.length + comboSubjects.length} subjects',
+          '${normalSubjects.length + comboSubjects.length} subjects${totalCredits > 0 ? '  ·  $totalCredits credits' : ''}',
         ),
         children: [
-          for (final subject
-              in normalSubjects)
-            ListTile(
-              title: Text(
-                subject.code,
-                style:
-                    const TextStyle(
-                  fontWeight:
-                      FontWeight.bold,
-                ),
-              ),
-              subtitle:
-                  Text(subject.name),
-              trailing: Row(
-                mainAxisSize:
-                    MainAxisSize.min,
-                children: [
-                  Text(
-                    '${subject.credits} cr',
-                  ),
-                  const SizedBox(
-                    width: 12,
-                  ),
-                  const Icon(
-                    Icons.chevron_right,
-                  ),
-                ],
-              ),
+          for (final subject in normalSubjects)
+            _SubjectRow(
+              subject: subject,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) =>
-                        SubjectDetailScreen(
+                    builder: (_) => SubjectDetailScreen(
+                      curriculumCode: curriculumCode,
                       subject: subject,
                     ),
                   ),
@@ -841,73 +831,43 @@ class _SemesterCard
               },
             ),
 
-          if (selectedCombo == null &&
-              comboPlaceholders.isNotEmpty)
+          if (selectedCombo == null && comboPlaceholders.isNotEmpty)
             const ListTile(
-              leading: Icon(
-                Icons.route_outlined,
-              ),
-              title: Text(
-                'Specialization subject',
-              ),
-              subtitle: Text(
-                'Choose your specialization after Semester 4.',
-              ),
+              leading: Icon(Icons.route_outlined),
+              title: Text('Specialization subject'),
+              subtitle: Text('Choose your specialization after Semester 4.'),
             ),
 
           if (selectedCombo != null)
-            for (final comboSubject
-                in comboSubjects)
+            for (final comboSubject in comboSubjects)
               ListTile(
-                leading: const Icon(
-                  Icons.route_outlined,
-                ),
+                leading: const Icon(Icons.route_outlined),
                 title: Text(
                   comboSubject.code,
-                  style:
-                      const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                subtitle:
-                    Text(
-                  comboSubject.name,
-                ),
+                subtitle: Text(comboSubject.name),
                 trailing: Row(
-                  mainAxisSize:
-                      MainAxisSize.min,
+                  mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Chip(
-                      label: Text(
-                        'Specialization',
-                      ),
-                    ),
-                    SizedBox(
-                      width: 8,
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                    ),
+                    Chip(label: Text('Specialization')),
+                    SizedBox(width: 8),
+                    Icon(Icons.chevron_right),
                   ],
                 ),
                 onTap: () {
-                  final subject =
-                      CurriculumSubject(
-                    code:
-                        comboSubject.code,
-                    name:
-                        comboSubject.name,
-                    semester:
-                        comboSubject.semester,
+                  final subject = CurriculumSubject(
+                    code: comboSubject.code,
+                    name: comboSubject.name,
+                    semester: comboSubject.semester,
                     credits: 0,
                     prerequisite: '',
                   );
 
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) =>
-                          SubjectDetailScreen(
+                      builder: (_) => SubjectDetailScreen(
+                        curriculumCode: curriculumCode,
                         subject: subject,
                       ),
                     ),
@@ -920,88 +880,122 @@ class _SemesterCard
   }
 }
 
-class _SpecializationCard
-    extends StatelessWidget {
-  final SpecializationCombo? combo;
-  final VoidCallback onChoose;
-
-  const _SpecializationCard({
-    required this.combo,
-    required this.onChoose,
-  });
+class _SubjectRow extends StatelessWidget {
+  const _SubjectRow({required this.subject, required this.onTap});
+  final CurriculumSubject subject;
+  final VoidCallback onTap;
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Card(
-      margin: const EdgeInsets.only(
-        bottom: 18,
+  Widget build(BuildContext context) {
+    final names = subject.name.split('_');
+    final english = names.first.trim();
+    final vietnamese = names.length > 1
+        ? names.sublist(1).join('_').trim()
+        : '';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: AppColors.hover,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 120,
+                child: Text(
+                  subject.code,
+                  style: monoStyle.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      english,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (vietnamese.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        vietnamese,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (subject.credits > 0)
+                Text(
+                  '${subject.credits} cr',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              const SizedBox(width: 12),
+              const Icon(Icons.chevron_right, size: 19),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _SpecializationCard extends StatelessWidget {
+  final SpecializationCombo combo;
+
+  const _SpecializationCard({required this.combo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 18),
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.route_outlined,
-                  size: 30,
-                ),
-                const SizedBox(
-                  width: 12,
-                ),
+                const Icon(Icons.route_outlined, size: 30),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    combo == null
-                        ? 'Choose your specialization'
-                        : 'Your specialization',
-                    style:
-                        const TextStyle(
+                    'Your specialization',
+                    style: const TextStyle(
                       fontSize: 21,
-                      fontWeight:
-                          FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(
-              height: 12,
-            ),
+            const SizedBox(height: 12),
 
-            if (combo == null)
-              const Text(
-                'Your specialization subjects begin after '
-                'this stage. Choose a career path and we '
-                'will place its real FLM subjects into the '
-                'correct semesters.',
-              )
-            else ...[
+            ...[
               Text(
-                combo!.name,
-                style:
-                    const TextStyle(
+                combo.name,
+                style: const TextStyle(
                   fontSize: 18,
-                  fontWeight:
-                      FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
 
-              const SizedBox(
-                height: 12,
-              ),
+              const SizedBox(height: 12),
 
-              for (final subject
-                  in combo!.subjects)
+              for (final subject in combo.subjects)
                 Padding(
-                  padding:
-                      const EdgeInsets.only(
-                    bottom: 5,
-                  ),
+                  padding: const EdgeInsets.only(bottom: 5),
                   child: Text(
                     'Semester ${subject.semester}  •  '
                     '${subject.code}  •  '
@@ -1009,24 +1003,6 @@ class _SpecializationCard
                   ),
                 ),
             ],
-
-            const SizedBox(
-              height: 18,
-            ),
-
-            FilledButton.icon(
-              onPressed: onChoose,
-              icon: Icon(
-                combo == null
-                    ? Icons.route_outlined
-                    : Icons.edit_outlined,
-              ),
-              label: Text(
-                combo == null
-                    ? 'Choose specialization'
-                    : 'Change specialization',
-              ),
-            ),
           ],
         ),
       ),
