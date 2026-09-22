@@ -8,9 +8,10 @@ class AppShell extends StatefulWidget {
     required this.child,
     this.title,
     this.actions = const [],
-    this.selectedIndex = 1,
+    this.selectedIndex = 0,
     this.onLogout,
     this.isLoggingOut = false,
+    this.onSearchTap,
   });
   final Widget child;
   final String? title;
@@ -18,6 +19,7 @@ class AppShell extends StatefulWidget {
   final int selectedIndex;
   final VoidCallback? onLogout;
   final bool isLoggingOut;
+  final VoidCallback? onSearchTap;
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -25,14 +27,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   bool _collapsed = false;
   static const _items = <(IconData, String)>[
-    (Icons.dashboard_outlined, 'Overview'),
     (Icons.school_outlined, 'Curriculum'),
-    (Icons.hub_outlined, 'Knowledge'),
-    (Icons.search, 'Search'),
-    (Icons.note_alt_outlined, 'Notes'),
-    (Icons.auto_awesome_mosaic_outlined, 'Obsidian'),
-    (Icons.sync_outlined, 'Sync'),
-    (Icons.settings_outlined, 'Settings'),
   ];
   @override
   Widget build(BuildContext context) {
@@ -134,7 +129,7 @@ class _AppShellState extends State<AppShell> {
           child: Tooltip(
             message: collapsed ? _items[i].$2 : '',
             child: Material(
-              color: i == widget.selectedIndex
+              color: (i == widget.selectedIndex || _items.length == 1)
                   ? AppColors.hover
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
@@ -149,7 +144,7 @@ class _AppShellState extends State<AppShell> {
                         width: 54,
                         child: Icon(
                           _items[i].$1,
-                          color: i == widget.selectedIndex
+                          color: (i == widget.selectedIndex || _items.length == 1)
                               ? AppColors.primary
                               : AppColors.textSecondary,
                         ),
@@ -159,10 +154,10 @@ class _AppShellState extends State<AppShell> {
                           child: Text(
                             _items[i].$2,
                             style: TextStyle(
-                              color: i == widget.selectedIndex
+                              color: (i == widget.selectedIndex || _items.length == 1)
                                   ? AppColors.textPrimary
                                   : AppColors.textSecondary,
-                              fontWeight: i == widget.selectedIndex
+                              fontWeight: (i == widget.selectedIndex || _items.length == 1)
                                   ? FontWeight.w600
                                   : FontWeight.w400,
                             ),
@@ -232,3 +227,4 @@ class _AppShellState extends State<AppShell> {
     ],
   );
 }
+

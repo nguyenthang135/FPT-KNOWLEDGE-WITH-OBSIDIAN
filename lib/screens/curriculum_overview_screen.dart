@@ -16,8 +16,13 @@ import 'subject_detail_screen.dart';
 
 class CurriculumOverviewScreen extends StatefulWidget {
   final String curriculumCode;
+  final String? preferredCombo;
 
-  const CurriculumOverviewScreen({super.key, required this.curriculumCode});
+  const CurriculumOverviewScreen({
+    super.key,
+    required this.curriculumCode,
+    this.preferredCombo,
+  });
 
   @override
   State<CurriculumOverviewScreen> createState() =>
@@ -44,12 +49,21 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
   String _exportMessage = '';
   DateTime? _lastSync;
 
+  final TextEditingController _subjectSearchController = TextEditingController();
+  String _subjectSearchQuery = '';
+
   @override
   void initState() {
     super.initState();
 
     _restoreVault();
     _loadSubjects();
+  }
+
+  @override
+  void dispose() {
+    _subjectSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _restoreVault() async {
@@ -83,6 +97,10 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
         _subjects = subjects;
         _loading = false;
       });
+
+      if (widget.preferredCombo != null && _selectedCombo == null) {
+        _tryAutoSelectCombo(widget.preferredCombo!);
+      }
     } catch (error) {
       final elapsed = DateTime.now().difference(startTime);
       const minDuration = Duration(milliseconds: 2500);
@@ -98,6 +116,25 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
         _error = error.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _tryAutoSelectCombo(String comboName) async {
+    try {
+      final service = FlmComboService();
+      final options = await service.loadAvailableCombos(widget.curriculumCode);
+      final norm = comboName.trim().toUpperCase();
+      final matched = options.where((opt) => opt.name.toUpperCase().contains(norm)).toList();
+      if (matched.isNotEmpty) {
+        final combo = await service.loadCombo(matched.first);
+        if (mounted) {
+          setState(() {
+            _selectedCombo = combo;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Auto-select combo error: $e');
     }
   }
 
@@ -437,23 +474,61 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
         .where((subject) => subject.isComboPlaceholder)
         .toList();
 
-    final semesters = <int>{};
+    final query = _subjectSearchQuery.trim().toLowerCase();
 
+    final filteredNormalSubjects = normalSubjects.where((subject) {
+      if (query.isEmpty) return true;
+      return subject.code.toLowerCase().contains(query) ||
+          subject.name.toLowerCase().contains(query) ||
+          'kỳ ${subject.semester}'.contains(query) ||
+          'semester ${subject.semester}'.contains(query);
+    }).toList();
+
+    final filteredComboPlaceholders = comboPlaceholders.where((subject) {
+      if (query.isEmpty) return true;
+      return subject.code.toLowerCase().contains(query) ||
+          subject.name.toLowerCase().contains(query) ||
+          'kỳ ${subject.semester}'.contains(query) ||
+          'semester ${subject.semester}'.contains(query);
+    }).toList();
+
+    final filteredComboSubjects = _selectedCombo?.subjects.where((subject) {
+      if (query.isEmpty) return true;
+      return subject.code.toLowerCase().contains(query) ||
+          subject.name.toLowerCase().contains(query) ||
+          'kỳ ${subject.semester}'.contains(query) ||
+          'semester ${subject.semester}'.contains(query);
+    }).toList();
+
+    final semesters = <int>{};
     for (final subject in normalSubjects) {
       semesters.add(subject.semester);
     }
-
     for (final placeholder in comboPlaceholders) {
       semesters.add(placeholder.semester);
     }
-
     if (_selectedCombo != null) {
       for (final subject in _selectedCombo!.subjects) {
         semesters.add(subject.semester);
       }
     }
-
     final semesterNumbers = semesters.toList()..sort();
+
+    final activeSemesters = <int>{};
+    for (final subject in filteredNormalSubjects) {
+      activeSemesters.add(subject.semester);
+    }
+    for (final placeholder in filteredComboPlaceholders) {
+      activeSemesters.add(placeholder.semester);
+    }
+    if (filteredComboSubjects != null) {
+      for (final subject in filteredComboSubjects) {
+        activeSemesters.add(subject.semester);
+      }
+    }
+    final displaySemesterNumbers = query.isEmpty
+        ? semesterNumbers
+        : (activeSemesters.toList()..sort());
 
     final parts = widget.curriculumCode.split('_');
     final program = parts.length > 1
@@ -465,9 +540,13 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
       (sum, item) => sum + item.credits,
     );
 
+    final totalMatchedSubjects = filteredNormalSubjects.length +
+        filteredComboPlaceholders.length +
+        (filteredComboSubjects?.length ?? 0);
+
     return AppShell(
       title: 'Curriculum',
-      selectedIndex: 1,
+      selectedIndex: 0,
       onLogout: _logout,
       isLoggingOut: _loggingOut,
       child: ListView(
@@ -544,6 +623,59 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
                   _SpecializationCard(combo: _selectedCombo!),
                   const SizedBox(height: 12),
                 ],
+
+                // Subject search bar
+                TextField(
+                  controller: _subjectSearchController,
+                  onChanged: (val) => setState(() => _subjectSearchQuery = val),
+                  decoration: InputDecoration(
+                    labelText: 'Tìm kiếm môn học',
+                    hintText: 'Mã môn (PRJ301, PRO192...), tên môn (Java...), hoặc kỳ học...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _subjectSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            tooltip: 'Xóa tìm kiếm',
+                            onPressed: () {
+                              _subjectSearchController.clear();
+                              setState(() => _subjectSearchQuery = '');
+                            },
+                          )
+                        : null,
+                  ),
+                ),
+                if (_subjectSearchQuery.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Tìm thấy $totalMatchedSubjects môn học',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      TextButton(
+                        onPressed: () {
+                          _subjectSearchController.clear();
+                          setState(() => _subjectSearchQuery = '');
+                        },
+                        child: const Text('Xóa bộ lọc', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 20),
+
                 Row(
                   children: [
                     Expanded(
@@ -553,21 +685,50 @@ class _CurriculumOverviewScreenState extends State<CurriculumOverviewScreen> {
                       ),
                     ),
                     Text(
-                      '${semesterNumbers.length} semesters',
+                      '${displaySemesterNumbers.length} / ${semesterNumbers.length} semesters',
                       style: const TextStyle(color: AppColors.textMuted),
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
-                for (final semester in semesterNumbers)
+                if (displaySemesterNumbers.isEmpty && _subjectSearchQuery.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(Icons.search_off, size: 48, color: AppColors.textMuted),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Không tìm thấy môn học nào khớp với "$_subjectSearchQuery"',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Thử tìm theo mã môn (vd: PRJ, PRO, MAS) hoặc tên môn học.',
+                            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                for (final semester in displaySemesterNumbers)
                   _SemesterCard(
                     curriculumCode: widget.curriculumCode,
                     semester: semester,
-                    normalSubjects: normalSubjects
+                    isSearching: _subjectSearchQuery.isNotEmpty,
+                    normalSubjects: filteredNormalSubjects
                         .where((subject) => subject.semester == semester)
                         .toList(),
-                    comboPlaceholders: comboPlaceholders
+                    comboPlaceholders: filteredComboPlaceholders
                         .where((subject) => subject.semester == semester)
+                        .toList(),
+                    filteredComboSubjects: filteredComboSubjects
+                        ?.where((subject) => subject.semester == semester)
                         .toList(),
                     selectedCombo: _selectedCombo,
                   ),
@@ -785,21 +946,27 @@ class _SemesterCard extends StatelessWidget {
 
   final SpecializationCombo? selectedCombo;
 
+  final bool isSearching;
+
+  final List<ComboSubject>? filteredComboSubjects;
+
   const _SemesterCard({
     required this.curriculumCode,
     required this.semester,
     required this.normalSubjects,
     required this.comboPlaceholders,
     required this.selectedCombo,
+    this.isSearching = false,
+    this.filteredComboSubjects,
   });
 
   @override
   Widget build(BuildContext context) {
-    final comboSubjects =
-        selectedCombo?.subjects
+    final comboSubjects = filteredComboSubjects ??
+        (selectedCombo?.subjects
             .where((subject) => subject.semester == semester)
             .toList() ??
-        [];
+        []);
     final totalCredits = normalSubjects.fold<int>(
       0,
       (sum, subject) => sum + subject.credits,
@@ -808,7 +975,7 @@ class _SemesterCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
       child: ExpansionTile(
-        initiallyExpanded: semester == 1,
+        initiallyExpanded: isSearching || semester == 1,
         title: Text(
           semester == 0 ? 'Preparation / Semester 0' : 'Semester $semester',
         ),
