@@ -9,6 +9,7 @@ import '../ai_chat_service.dart';
 import '../ai_prompt_builder.dart';
 import '../gemini_ai_chat_service.dart';
 import '../mock_ai_chat_service.dart';
+import '../openai_ai_chat_service.dart';
 
 class AiAssistantDialog extends StatefulWidget {
   final String curriculumCode;
@@ -27,10 +28,15 @@ class AiAssistantDialog extends StatefulWidget {
 }
 
 class _AiAssistantDialogState extends State<AiAssistantDialog> {
-  static const _apiKey = String.fromEnvironment('GEMINI_API_KEY');
-  static const _model = String.fromEnvironment(
+  static const _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const _geminiModel = String.fromEnvironment(
     'GEMINI_MODEL',
     defaultValue: 'gemini-3.8-flash',
+  );
+  static const _openAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
+  static const _openAiModel = String.fromEnvironment(
+    'OPENAI_MODEL',
+    defaultValue: 'gpt-5.5',
   );
 
   final _questionController = TextEditingController();
@@ -74,9 +80,18 @@ class _AiAssistantDialogState extends State<AiAssistantDialog> {
     });
   }
 
-  AiChatService get _chatService => _apiKey.trim().isEmpty
-      ? const MockAiChatService()
-      : GeminiAiChatService(apiKey: _apiKey, model: _model);
+  AiChatService get _chatService {
+    if (_openAiApiKey.trim().isNotEmpty) {
+      return OpenAiChatService(apiKey: _openAiApiKey, model: _openAiModel);
+    }
+    if (_geminiApiKey.trim().isNotEmpty) {
+      return GeminiAiChatService(
+        apiKey: _geminiApiKey,
+        model: _geminiModel,
+      );
+    }
+    return const MockAiChatService();
+  }
 
   Future<void> _send([String? quickQuestion]) async {
     final question = (quickQuestion ?? _questionController.text).trim();
@@ -134,7 +149,11 @@ class _AiAssistantDialogState extends State<AiAssistantDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final usingGemini = _apiKey.trim().isNotEmpty;
+    final providerStatus = _openAiApiKey.trim().isNotEmpty
+        ? 'OpenAI đang trả lời dựa trên ngữ cảnh môn học.'
+        : _geminiApiKey.trim().isNotEmpty
+        ? 'Gemini AI đang trả lời dựa trên ngữ cảnh môn học.'
+        : 'Chế độ dữ liệu demo: thêm API key để dùng AI thật.';
 
     return Dialog(
       child: ConstrainedBox(
@@ -163,9 +182,7 @@ class _AiAssistantDialogState extends State<AiAssistantDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                usingGemini
-                    ? 'Gemini AI đang trả lời dựa trên ngữ cảnh môn học.'
-                    : 'Chế độ dữ liệu demo: thêm GEMINI_API_KEY để dùng AI thật.',
+                providerStatus,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 14),
