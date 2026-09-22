@@ -50,10 +50,7 @@ class OpenAiChatService implements AiChatService {
       final response = await httpRequest.close();
       final rawBody = await utf8.decoder.bind(response).join();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw AiChatException(
-          'OpenAI không thể trả lời (${response.statusCode}). '
-          'Hãy kiểm tra API key, model, billing và kết nối mạng.',
-        );
+        throw AiChatException(_buildApiErrorMessage(response.statusCode, rawBody));
       }
 
       final decoded = jsonDecode(rawBody);
@@ -128,5 +125,40 @@ class OpenAiChatService implements AiChatService {
       }
     }
     return textParts.join('\n').trim();
+  }
+
+  String _buildApiErrorMessage(int statusCode, String rawBody) {
+    String? code;
+    try {
+      final decoded = jsonDecode(rawBody);
+      if (decoded is Map && decoded['error'] is Map) {
+        code = decoded['error']['code']?.toString();
+      }
+    } on FormatException {
+      // Keep the user-facing error safe even if an upstream response is not JSON.
+    }
+
+    if (statusCode == 429) {
+      return switch (code) {
+        'credit_balance_exhausted' =>
+          'OpenAI không thể trả lời: API project đã hết credit. '
+              'Hãy thêm credit trong OpenAI Platform Billing.',
+        'organization_spend_limit_exceeded' =>
+          'OpenAI không thể trả lời: tổ chức đã chạm giới hạn chi tiêu.',
+        'project_spend_limit_exceeded' =>
+          'OpenAI không thể trả lời: project đã chạm giới hạn chi tiêu.',
+        'organization_usage_limit_exceeded' =>
+          'OpenAI không thể trả lời: tổ chức đã chạm giới hạn sử dụng.',
+        'slow_down' =>
+          'OpenAI đang yêu cầu gửi chậm hơn. Hãy đợi một chút rồi thử lại.',
+        _ =>
+          'OpenAI đang giới hạn request (429). Hãy đợi một chút rồi thử lại; '
+              'nếu lỗi lặp lại, kiểm tra credit và giới hạn API.',
+      };
+    }
+
+    final suffix = code == null || code.isEmpty ? '' : ' • $code';
+    return 'OpenAI không thể trả lời ($statusCode$suffix). '
+        'Hãy kiểm tra API key, model, billing và kết nối mạng.';
   }
 }
