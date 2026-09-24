@@ -9,18 +9,12 @@ class ComboOption {
   final String name;
   final String detailUrl;
 
-  const ComboOption({
-    required this.name,
-    required this.detailUrl,
-  });
+  const ComboOption({required this.name, required this.detailUrl});
 
-  factory ComboOption.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory ComboOption.fromJson(Map<String, dynamic> json) {
     return ComboOption(
       name: json['name']?.toString().trim() ?? '',
-      detailUrl:
-          json['detailUrl']?.toString().trim() ?? '',
+      detailUrl: json['detailUrl']?.toString().trim() ?? '',
     );
   }
 }
@@ -36,16 +30,11 @@ class ComboSubject {
     required this.semester,
   });
 
-  factory ComboSubject.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory ComboSubject.fromJson(Map<String, dynamic> json) {
     return ComboSubject(
       code: json['code']?.toString().trim() ?? '',
       name: json['name']?.toString().trim() ?? '',
-      semester: int.tryParse(
-            json['semester']?.toString() ?? '',
-          ) ??
-          0,
+      semester: int.tryParse(json['semester']?.toString() ?? '') ?? 0,
     );
   }
 }
@@ -65,28 +54,19 @@ class SpecializationCombo {
 }
 
 class FlmComboService {
-  FlmComboService({
-    FlmSession? session,
-  }) : _session = session ?? FlmSession.instance;
+  FlmComboService({FlmSession? session})
+    : _session = session ?? FlmSession.instance;
 
   final FlmSession _session;
 
-  Future<List<ComboOption>> loadAvailableCombos(
-    String curriculumCode,
-  ) async {
+  Future<List<ComboOption>> loadAvailableCombos(String curriculumCode) async {
     // Always return to the correct curriculum first.
-    await _session.searchCurriculum(
-      curriculumCode,
-    );
+    await _session.searchCurriculum(curriculumCode);
 
-    await _session.openCurriculumByCode(
-      curriculumCode,
-    );
+    await _session.openCurriculumByCode(curriculumCode);
 
     // Find "View Combo".
-    final result =
-        await _session.controller.executeScript(
-      '''
+    final result = await _session.controller.executeScript('''
 (() => {
   const elements = Array.from(
     document.querySelectorAll(
@@ -127,23 +107,18 @@ class FlmComboService {
 
   return 'CLICKED';
 })();
-''',
-    );
+''');
 
     final action = _decodeJsString(result);
 
     if (action.startsWith('http')) {
       await _loadUrlAndWait(action);
     } else {
-      await Future<void>.delayed(
-        const Duration(milliseconds: 1000),
-      );
+      await Future<void>.delayed(const Duration(milliseconds: 1000));
     }
 
     // Extract combo detail links.
-    final linksResult =
-        await _session.controller.executeScript(
-      '''
+    final linksResult = await _session.controller.executeScript('''
 (() => {
   const anchors = Array.from(
     document.querySelectorAll('a[href]')
@@ -195,22 +170,15 @@ class FlmComboService {
 
   return JSON.stringify(found);
 })();
-''',
-    );
+''');
 
     return _decodeOptions(linksResult);
   }
 
-  Future<SpecializationCombo> loadCombo(
-    ComboOption option,
-  ) async {
-    await _loadUrlAndWait(
-      option.detailUrl,
-    );
+  Future<SpecializationCombo> loadCombo(ComboOption option) async {
+    await _loadUrlAndWait(option.detailUrl);
 
-    final result =
-        await _session.controller.executeScript(
-      '''
+    final result = await _session.controller.executeScript('''
 (() => {
   const clean = value =>
     (value || '')
@@ -334,60 +302,41 @@ class FlmComboService {
     subjects
   });
 })();
-''',
-    );
+''');
 
-    final data =
-        _decodeMap(result);
+    final data = _decodeMap(result);
 
-    final subjects =
-        <ComboSubject>[];
+    final subjects = <ComboSubject>[];
 
-    final rawSubjects =
-        data['subjects'];
+    final rawSubjects = data['subjects'];
 
     if (rawSubjects is List) {
       for (final item in rawSubjects) {
         if (item is Map) {
-          subjects.add(
-            ComboSubject.fromJson(
-              Map<String, dynamic>.from(
-                item,
-              ),
-            ),
-          );
+          subjects.add(ComboSubject.fromJson(Map<String, dynamic>.from(item)));
         }
       }
     }
 
     return SpecializationCombo(
-      name:
-          data['name']?.toString().trim().isNotEmpty ==
-                  true
-              ? data['name'].toString().trim()
-              : option.name,
-      note:
-          data['note']?.toString().trim() ?? '',
-      detailUrl:
-          option.detailUrl,
-      subjects:
-          subjects,
+      name: data['name']?.toString().trim().isNotEmpty == true
+          ? data['name'].toString().trim()
+          : option.name,
+      note: data['note']?.toString().trim() ?? '',
+      detailUrl: option.detailUrl,
+      subjects: subjects,
     );
   }
 
-  String _decodeJsString(
-    Object? result,
-  ) {
+  String _decodeJsString(Object? result) {
     if (result == null) {
       return '';
     }
 
-    final raw =
-        result.toString();
+    final raw = result.toString();
 
     try {
-      final decoded =
-          jsonDecode(raw);
+      final decoded = jsonDecode(raw);
 
       if (decoded is String) {
         return decoded;
@@ -397,15 +346,12 @@ class FlmComboService {
     return raw;
   }
 
-  List<ComboOption> _decodeOptions(
-    Object? result,
-  ) {
+  List<ComboOption> _decodeOptions(Object? result) {
     if (result == null) {
       return [];
     }
 
-    dynamic decoded =
-        result.toString();
+    dynamic decoded = result.toString();
 
     for (var i = 0; i < 2; i++) {
       if (decoded is! String) {
@@ -413,8 +359,7 @@ class FlmComboService {
       }
 
       try {
-        decoded =
-            jsonDecode(decoded);
+        decoded = jsonDecode(decoded);
       } catch (_) {
         break;
       }
@@ -426,30 +371,17 @@ class FlmComboService {
 
     return decoded
         .whereType<Map>()
-        .map(
-          (item) =>
-              ComboOption.fromJson(
-            Map<String, dynamic>.from(
-              item,
-            ),
-          ),
-        )
-        .where(
-          (option) =>
-              option.detailUrl.isNotEmpty,
-        )
+        .map((item) => ComboOption.fromJson(Map<String, dynamic>.from(item)))
+        .where((option) => option.detailUrl.isNotEmpty)
         .toList();
   }
 
-  Map<String, dynamic> _decodeMap(
-    Object? result,
-  ) {
+  Map<String, dynamic> _decodeMap(Object? result) {
     if (result == null) {
       return {};
     }
 
-    dynamic decoded =
-        result.toString();
+    dynamic decoded = result.toString();
 
     for (var i = 0; i < 2; i++) {
       if (decoded is! String) {
@@ -457,56 +389,36 @@ class FlmComboService {
       }
 
       try {
-        decoded =
-            jsonDecode(decoded);
+        decoded = jsonDecode(decoded);
       } catch (_) {
         break;
       }
     }
 
     if (decoded is Map) {
-      return Map<String, dynamic>.from(
-        decoded,
-      );
+      return Map<String, dynamic>.from(decoded);
     }
 
     return {};
   }
 
-  Future<void> _loadUrlAndWait(
-    String url,
-  ) async {
-    final completer =
-        Completer<void>();
+  Future<void> _loadUrlAndWait(String url) async {
+    final completer = Completer<void>();
 
-    late final StreamSubscription<
-        LoadingState> subscription;
+    late final StreamSubscription<LoadingState> subscription;
 
-    subscription =
-        _session.controller.loadingState.listen(
-      (state) {
-        if (state ==
-                LoadingState.navigationCompleted &&
-            !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-    );
+    subscription = _session.controller.loadingState.listen((state) {
+      if (state == LoadingState.navigationCompleted && !completer.isCompleted) {
+        completer.complete();
+      }
+    });
 
     try {
-      await _session.controller.loadUrl(
-        url,
-      );
+      await _session.controller.loadUrl(url);
 
-      await completer.future.timeout(
-        const Duration(seconds: 15),
-      );
+      await completer.future.timeout(const Duration(seconds: 15));
     } on TimeoutException {
-      await Future<void>.delayed(
-        const Duration(
-          milliseconds: 800,
-        ),
-      );
+      await Future<void>.delayed(const Duration(milliseconds: 800));
     } finally {
       await subscription.cancel();
     }

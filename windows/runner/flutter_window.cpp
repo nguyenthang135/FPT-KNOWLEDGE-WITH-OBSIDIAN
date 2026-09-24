@@ -1,4 +1,5 @@
 #include "flutter_window.h"
+#include "obsidian_desktop.h"
 #include "vault_picker.h"
 
 #include <optional>
@@ -27,6 +28,9 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   RegisterVaultPicker(flutter_controller_->engine()->messenger(), GetHandle());
+  RegisterObsidianDesktop(flutter_controller_->engine()->messenger(),
+                          GetHandle(),
+                          flutter_controller_->view()->GetNativeWindow());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -42,6 +46,8 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  ShutdownObsidianDesktop();
+
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

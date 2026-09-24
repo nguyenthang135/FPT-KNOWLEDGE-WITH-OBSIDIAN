@@ -4,5 +4,6 @@ import 'package:flutter/services.dart';
 class VaultPicker {
   const VaultPicker();
   static const channel = MethodChannel('fptu_se_brain/vault');
-  Future<String?> pickDirectory() => channel.invokeMethod<String>('pickDirectory');
+  Future<String?> pickDirectory() =>
+      channel.invokeMethod<String>('pickDirectory');
 }

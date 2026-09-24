@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local launcher containing the Groq API key
+/start-fpt-knowledge-groq.bat
+
 # Symbolication related
 app.*.symbols
 

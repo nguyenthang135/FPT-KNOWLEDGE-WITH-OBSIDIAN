@@ -2,25 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../flm/flm_combo_service.dart';
 
-class ComboSelectionScreen
-    extends StatefulWidget {
+class ComboSelectionScreen extends StatefulWidget {
   final String curriculumCode;
 
-  const ComboSelectionScreen({
-    super.key,
-    required this.curriculumCode,
-  });
+  const ComboSelectionScreen({super.key, required this.curriculumCode});
 
   @override
-  State<ComboSelectionScreen>
-      createState() =>
-          _ComboSelectionScreenState();
+  State<ComboSelectionScreen> createState() => _ComboSelectionScreenState();
 }
 
-class _ComboSelectionScreenState
-    extends State<ComboSelectionScreen> {
-  final FlmComboService _service =
-      FlmComboService();
+class _ComboSelectionScreenState extends State<ComboSelectionScreen> {
+  final FlmComboService _service = FlmComboService();
 
   bool _loading = true;
   String? _error;
@@ -38,11 +30,7 @@ class _ComboSelectionScreenState
 
   Future<void> _loadOptions() async {
     try {
-      final options =
-          await _service
-              .loadAvailableCombos(
-        widget.curriculumCode,
-      );
+      final options = await _service.loadAvailableCombos(widget.curriculumCode);
 
       if (!mounted) return;
 
@@ -60,35 +48,26 @@ class _ComboSelectionScreenState
     }
   }
 
-  Future<void> _choose(
-    ComboOption option,
-  ) async {
+  Future<void> _choose(ComboOption option) async {
     if (_loadingComboUrl != null) {
       return;
     }
 
     setState(() {
-      _loadingComboUrl =
-          option.detailUrl;
+      _loadingComboUrl = option.detailUrl;
     });
 
     try {
-      final combo =
-          await _service.loadCombo(
-        option,
-      );
+      final combo = await _service.loadCombo(option);
 
       if (!mounted) return;
 
-      Navigator.of(context).pop(
-        combo,
-      );
+      Navigator.of(context).pop(combo);
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
-        _error =
-            'Could not load specialization.\n$error';
+        _error = 'Could not load specialization.\n$error';
       });
     } finally {
       if (mounted) {
@@ -102,42 +81,26 @@ class _ComboSelectionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text(
-          'Choose specialization',
-        ),
-      ),
+      appBar: AppBar(title: const Text('Choose specialization')),
       body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child:
-            CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
       return Center(
         child: Padding(
-          padding:
-              const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _error!,
-                textAlign:
-                    TextAlign.center,
-              ),
+              Text(_error!, textAlign: TextAlign.center),
 
-              const SizedBox(
-                height: 20,
-              ),
+              const SizedBox(height: 20),
 
               FilledButton(
                 onPressed: () {
@@ -148,8 +111,7 @@ class _ComboSelectionScreenState
 
                   _loadOptions();
                 },
-                child:
-                    const Text('Retry'),
+                child: const Text('Retry'),
               ),
             ],
           ),
@@ -166,100 +128,58 @@ class _ComboSelectionScreenState
     }
 
     return ListView(
-      padding:
-          const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(28),
       children: [
         Text(
           'Choose your career path',
-          style: Theme.of(context)
-              .textTheme
-              .headlineMedium,
+          style: Theme.of(context).textTheme.headlineMedium,
         ),
 
-        const SizedBox(
-          height: 8,
-        ),
+        const SizedBox(height: 8),
 
         const Text(
           'FLM will provide the subjects and semesters '
           'belonging to the specialization you choose.',
         ),
 
-        const SizedBox(
-          height: 28,
-        ),
+        const SizedBox(height: 28),
 
-        for (final option
-            in _options)
+        for (final option in _options)
           Card(
-            margin:
-                const EdgeInsets.only(
-              bottom: 12,
-            ),
+            margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
-              padding:
-                  const EdgeInsets.all(
-                18,
-              ),
+              padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons
-                        .route_outlined,
-                    size: 30,
-                  ),
+                  const Icon(Icons.route_outlined, size: 30),
 
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
 
                   Expanded(
                     child: Text(
-                      option.name
-                              .trim()
-                              .isEmpty
+                      option.name.trim().isEmpty
                           ? 'Specialization'
                           : option.name,
-                      style:
-                          const TextStyle(
+                      style: const TextStyle(
                         fontSize: 17,
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
 
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
 
                   FilledButton(
-                    onPressed:
-                        _loadingComboUrl ==
-                                null
-                            ? () =>
-                                _choose(
-                                  option,
-                                )
-                            : null,
-                    child:
-                        _loadingComboUrl ==
-                                option
-                                    .detailUrl
-                            ? const SizedBox(
-                                width:
-                                    18,
-                                height:
-                                    18,
-                                child:
-                                    CircularProgressIndicator(
-                                  strokeWidth:
-                                      2,
-                                ),
-                              )
-                            : const Text(
-                                'Choose',
-                              ),
+                    onPressed: _loadingComboUrl == null
+                        ? () => _choose(option)
+                        : null,
+                    child: _loadingComboUrl == option.detailUrl
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Choose'),
                   ),
                 ],
               ),

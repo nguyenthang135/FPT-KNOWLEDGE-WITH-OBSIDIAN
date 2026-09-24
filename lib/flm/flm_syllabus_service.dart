@@ -28,36 +28,21 @@ class SyllabusMaterial {
     required this.note,
   });
 
-  factory SyllabusMaterial.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory SyllabusMaterial.fromJson(Map<String, dynamic> json) {
     bool parseBool(dynamic value) {
-      return value
-              ?.toString()
-              .trim()
-              .toLowerCase() ==
-          'true';
+      return value?.toString().trim().toLowerCase() == 'true';
     }
 
     return SyllabusMaterial(
-      description:
-          json['description']?.toString().trim() ?? '',
-      author:
-          json['author']?.toString().trim() ?? '',
-      publisher:
-          json['publisher']?.toString().trim() ?? '',
-      publishedDate:
-          json['publishedDate']?.toString().trim() ?? '',
-      edition:
-          json['edition']?.toString().trim() ?? '',
-      isbn:
-          json['isbn']?.toString().trim() ?? '',
-      isMain:
-          parseBool(json['isMain']),
-      isOnline:
-          parseBool(json['isOnline']),
-      note:
-          json['note']?.toString().trim() ?? '',
+      description: json['description']?.toString().trim() ?? '',
+      author: json['author']?.toString().trim() ?? '',
+      publisher: json['publisher']?.toString().trim() ?? '',
+      publishedDate: json['publishedDate']?.toString().trim() ?? '',
+      edition: json['edition']?.toString().trim() ?? '',
+      isbn: json['isbn']?.toString().trim() ?? '',
+      isMain: parseBool(json['isMain']),
+      isOnline: parseBool(json['isOnline']),
+      note: json['note']?.toString().trim() ?? '',
     );
   }
 }
@@ -66,19 +51,12 @@ class SyllabusLearningOutcome {
   final String name;
   final String details;
 
-  const SyllabusLearningOutcome({
-    required this.name,
-    required this.details,
-  });
+  const SyllabusLearningOutcome({required this.name, required this.details});
 
-  factory SyllabusLearningOutcome.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory SyllabusLearningOutcome.fromJson(Map<String, dynamic> json) {
     return SyllabusLearningOutcome(
-      name:
-          json['name']?.toString().trim() ?? '',
-      details:
-          json['details']?.toString().trim() ?? '',
+      name: json['name']?.toString().trim() ?? '',
+      details: json['details']?.toString().trim() ?? '',
     );
   }
 }
@@ -112,46 +90,20 @@ class SyllabusAssessment {
     required this.note,
   });
 
-  factory SyllabusAssessment.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory SyllabusAssessment.fromJson(Map<String, dynamic> json) {
     return SyllabusAssessment(
-      category:
-          json['category']?.toString().trim() ?? '',
-      type:
-          json['type']?.toString().trim() ?? '',
-      part:
-          json['part']?.toString().trim() ?? '',
-      weight:
-          json['weight']?.toString().trim() ?? '',
-      completionCriteria:
-          json['completionCriteria']
-                  ?.toString()
-                  .trim() ??
-              '',
-      duration:
-          json['duration']?.toString().trim() ?? '',
-      clo:
-          json['clo']?.toString().trim() ?? '',
-      questionType:
-          json['questionType']?.toString().trim() ?? '',
-      numberOfQuestions:
-          json['numberOfQuestions']
-                  ?.toString()
-                  .trim() ??
-              '',
-      knowledgeAndSkill:
-          json['knowledgeAndSkill']
-                  ?.toString()
-                  .trim() ??
-              '',
-      gradingGuide:
-          json['gradingGuide']
-                  ?.toString()
-                  .trim() ??
-              '',
-      note:
-          json['note']?.toString().trim() ?? '',
+      category: json['category']?.toString().trim() ?? '',
+      type: json['type']?.toString().trim() ?? '',
+      part: json['part']?.toString().trim() ?? '',
+      weight: json['weight']?.toString().trim() ?? '',
+      completionCriteria: json['completionCriteria']?.toString().trim() ?? '',
+      duration: json['duration']?.toString().trim() ?? '',
+      clo: json['clo']?.toString().trim() ?? '',
+      questionType: json['questionType']?.toString().trim() ?? '',
+      numberOfQuestions: json['numberOfQuestions']?.toString().trim() ?? '',
+      knowledgeAndSkill: json['knowledgeAndSkill']?.toString().trim() ?? '',
+      gradingGuide: json['gradingGuide']?.toString().trim() ?? '',
+      note: json['note']?.toString().trim() ?? '',
     );
   }
 }
@@ -197,23 +149,16 @@ class SyllabusDetailResult {
 }
 
 class FlmSyllabusService {
-  FlmSyllabusService({
-    FlmSession? session,
-  }) : _session =
-            session ?? FlmSession.instance;
+  FlmSyllabusService({FlmSession? session})
+    : _session = session ?? FlmSession.instance;
 
   final FlmSession _session;
 
-  Future<SyllabusDetailResult> loadExactSyllabus(
-    String subjectCode,
-  ) async {
-    final code =
-        subjectCode.trim().toUpperCase();
+  Future<SyllabusDetailResult> loadExactSyllabus(String subjectCode) async {
+    final code = subjectCode.trim().toUpperCase();
 
     if (code.isEmpty) {
-      throw ArgumentError(
-        'Subject code cannot be empty.',
-      );
+      throw ArgumentError('Subject code cannot be empty.');
     }
 
     await _openSyllabusSearch(code);
@@ -222,13 +167,8 @@ class FlmSyllabusService {
     return _extractSyllabus(code);
   }
 
-  Future<void> _openSyllabusSearch(
-    String subjectCode,
-  ) async {
-    final encoded =
-        Uri.encodeQueryComponent(
-      subjectCode,
-    );
+  Future<void> _openSyllabusSearch(String subjectCode) async {
+    final encoded = Uri.encodeQueryComponent(subjectCode);
 
     final url =
         'https://flm.fpt.edu.vn/gui/role/student/'
@@ -239,13 +179,11 @@ class FlmSyllabusService {
     await _loadUrlAndWait(url);
   }
 
-  Future<void> _openExactResult(
-    String subjectCode,
-  ) async {
-    final encodedCode =
-        jsonEncode(subjectCode);
+  Future<void> _openExactResult(String subjectCode) async {
+    final encodedCode = jsonEncode(subjectCode);
 
-    final script = '''
+    final script =
+        '''
 (() => {
   const wantedCode = $encodedCode;
 
@@ -296,17 +234,11 @@ class FlmSyllabusService {
 })();
 ''';
 
-    await _executeAndWaitForNavigation(
-      script,
-    );
+    await _executeAndWaitForNavigation(script);
   }
 
-  Future<SyllabusDetailResult> _extractSyllabus(
-    String subjectCode,
-  ) async {
-    final result =
-        await _session.controller.executeScript(
-      '''
+  Future<SyllabusDetailResult> _extractSyllabus(String subjectCode) async {
+    final result = await _session.controller.executeScript('''
 (() => {
   const clean = value =>
     (value || '')
@@ -552,158 +484,93 @@ class FlmSyllabusService {
     assessments
   });
 })();
-''',
-    );
+''');
 
-    final data =
-        _decodeMap(result);
+    final data = _decodeMap(result);
 
-    final materials =
-        <SyllabusMaterial>[];
+    final materials = <SyllabusMaterial>[];
 
-    final rawMaterials =
-        data['materials'];
+    final rawMaterials = data['materials'];
 
     if (rawMaterials is List) {
       for (final item in rawMaterials) {
         if (item is Map) {
           materials.add(
-            SyllabusMaterial.fromJson(
-              Map<String, dynamic>.from(
-                item,
-              ),
-            ),
+            SyllabusMaterial.fromJson(Map<String, dynamic>.from(item)),
           );
         }
       }
     }
 
-    final outcomes =
-        <SyllabusLearningOutcome>[];
+    final outcomes = <SyllabusLearningOutcome>[];
 
-    final rawOutcomes =
-        data['outcomes'];
+    final rawOutcomes = data['outcomes'];
 
     if (rawOutcomes is List) {
       for (final item in rawOutcomes) {
         if (item is Map) {
           outcomes.add(
-            SyllabusLearningOutcome.fromJson(
-              Map<String, dynamic>.from(
-                item,
-              ),
-            ),
+            SyllabusLearningOutcome.fromJson(Map<String, dynamic>.from(item)),
           );
         }
       }
     }
 
-    final assessments =
-        <SyllabusAssessment>[];
+    final assessments = <SyllabusAssessment>[];
 
-    final rawAssessments =
-        data['assessments'];
+    final rawAssessments = data['assessments'];
 
     if (rawAssessments is List) {
-      for (final item
-          in rawAssessments) {
+      for (final item in rawAssessments) {
         if (item is Map) {
           assessments.add(
-            SyllabusAssessment.fromJson(
-              Map<String, dynamic>.from(
-                item,
-              ),
-            ),
+            SyllabusAssessment.fromJson(Map<String, dynamic>.from(item)),
           );
         }
       }
     }
 
     return SyllabusDetailResult(
-      subjectCode:
-          subjectCode,
+      subjectCode: subjectCode,
 
-      url:
-          data['url']
-                  ?.toString() ??
-              '',
+      url: data['url']?.toString() ?? '',
 
-      syllabusName:
-          data['syllabusName']
-                  ?.toString() ??
-              '',
+      syllabusName: data['syllabusName']?.toString() ?? '',
 
-      courseNameEnglish:
-          data['courseNameEnglish']
-                  ?.toString() ??
-              '',
+      courseNameEnglish: data['courseNameEnglish']?.toString() ?? '',
 
-      credits:
-          int.tryParse(
-        data['credits']
-                ?.toString()
-                .trim() ??
-            '',
+      credits: int.tryParse(data['credits']?.toString().trim() ?? ''),
+
+      minimumPassMark: double.tryParse(
+        data['minimumPassMark']?.toString().trim() ?? '',
       ),
 
-      minimumPassMark:
-          double.tryParse(
-        data['minimumPassMark']
-                ?.toString()
-                .trim() ??
-            '',
-      ),
+      teachingMethod: data['teachingMethod']?.toString() ?? '',
 
-      teachingMethod:
-          data['teachingMethod']
-                  ?.toString() ??
-              '',
+      timeAllocation: data['timeAllocation']?.toString() ?? '',
 
-      timeAllocation:
-          data['timeAllocation']
-                  ?.toString() ??
-              '',
+      prerequisite: data['prerequisite']?.toString() ?? '',
 
-      prerequisite:
-          data['prerequisite']
-                  ?.toString() ??
-              '',
+      description: data['description']?.toString() ?? '',
 
-      description:
-          data['description']
-                  ?.toString() ??
-              '',
+      studentTasks: data['studentTasks']?.toString() ?? '',
 
-      studentTasks:
-          data['studentTasks']
-                  ?.toString() ??
-              '',
+      tools: data['tools']?.toString() ?? '',
 
-      tools:
-          data['tools']
-                  ?.toString() ??
-              '',
+      materials: materials,
 
-      materials:
-          materials,
+      outcomes: outcomes,
 
-      outcomes:
-          outcomes,
-
-      assessments:
-          assessments,
+      assessments: assessments,
     );
   }
 
-  Map<String, dynamic> _decodeMap(
-    Object? result,
-  ) {
+  Map<String, dynamic> _decodeMap(Object? result) {
     if (result == null) {
       return {};
     }
 
-    dynamic decoded =
-        result.toString();
+    dynamic decoded = result.toString();
 
     for (var i = 0; i < 2; i++) {
       if (decoded is! String) {
@@ -711,95 +578,58 @@ class FlmSyllabusService {
       }
 
       try {
-        decoded =
-            jsonDecode(decoded);
+        decoded = jsonDecode(decoded);
       } catch (_) {
         break;
       }
     }
 
     if (decoded is Map) {
-      return Map<String, dynamic>.from(
-        decoded,
-      );
+      return Map<String, dynamic>.from(decoded);
     }
 
     return {};
   }
 
-  Future<void> _loadUrlAndWait(
-    String url,
-  ) async {
-    final completer =
-        Completer<void>();
+  Future<void> _loadUrlAndWait(String url) async {
+    final completer = Completer<void>();
 
-    late final StreamSubscription<
-        LoadingState> subscription;
+    late final StreamSubscription<LoadingState> subscription;
 
-    subscription =
-        _session.controller.loadingState.listen(
-      (state) {
-        if (state ==
-                LoadingState.navigationCompleted &&
-            !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-    );
+    subscription = _session.controller.loadingState.listen((state) {
+      if (state == LoadingState.navigationCompleted && !completer.isCompleted) {
+        completer.complete();
+      }
+    });
 
     try {
-      await _session.controller.loadUrl(
-        url,
-      );
+      await _session.controller.loadUrl(url);
 
-      await completer.future.timeout(
-        const Duration(seconds: 15),
-      );
+      await completer.future.timeout(const Duration(seconds: 15));
     } on TimeoutException {
-      await Future<void>.delayed(
-        const Duration(
-          milliseconds: 800,
-        ),
-      );
+      await Future<void>.delayed(const Duration(milliseconds: 800));
     } finally {
       await subscription.cancel();
     }
   }
 
-  Future<void> _executeAndWaitForNavigation(
-    String script,
-  ) async {
-    final completer =
-        Completer<void>();
+  Future<void> _executeAndWaitForNavigation(String script) async {
+    final completer = Completer<void>();
 
-    late final StreamSubscription<
-        LoadingState> subscription;
+    late final StreamSubscription<LoadingState> subscription;
 
-    subscription =
-        _session.controller.loadingState.listen(
-      (state) {
-        if (state ==
-                LoadingState.navigationCompleted &&
-            !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-    );
+    subscription = _session.controller.loadingState.listen((state) {
+      if (state == LoadingState.navigationCompleted && !completer.isCompleted) {
+        completer.complete();
+      }
+    });
 
     try {
-      await _session.controller.executeScript(
-        script,
-      );
+      await _session.controller.executeScript(script);
 
-      await completer.future.timeout(
-        const Duration(seconds: 10),
-      );
+      await completer.future.timeout(const Duration(seconds: 10));
     } on TimeoutException {
-      await Future<void>.delayed(
-        const Duration(
-          milliseconds: 800,
-        ),
-      );
+      await Future<void>.delayed(const Duration(milliseconds: 800));
     } finally {
       await subscription.cancel();
     }

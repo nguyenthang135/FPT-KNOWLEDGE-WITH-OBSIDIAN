@@ -13,31 +13,20 @@ class CurriculumSubject {
     required this.prerequisite,
   });
 
-  factory CurriculumSubject.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory CurriculumSubject.fromJson(Map<String, dynamic> json) {
     return CurriculumSubject(
       code: json['code']?.toString().trim() ?? '',
       name: json['name']?.toString().trim() ?? '',
-      semester: int.tryParse(
-            json['semester']?.toString() ?? '',
-          ) ??
-          0,
-      credits: int.tryParse(
-            json['credits']?.toString() ?? '',
-          ) ??
-          0,
-      prerequisite:
-          json['prerequisite']?.toString().trim() ?? '',
+      semester: int.tryParse(json['semester']?.toString() ?? '') ?? 0,
+      credits: int.tryParse(json['credits']?.toString() ?? '') ?? 0,
+      prerequisite: json['prerequisite']?.toString().trim() ?? '',
     );
   }
 
   bool get hasPrerequisite {
     final value = prerequisite.trim().toLowerCase();
 
-    return value.isNotEmpty &&
-        value != 'none' &&
-        value != 'không';
+    return value.isNotEmpty && value != 'none' && value != 'không';
   }
 
   bool get isComboPlaceholder {

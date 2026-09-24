@@ -21,36 +21,24 @@ class CurriculumMatchResult {
 class CurriculumResolver {
   final FlmSession _session;
 
-  CurriculumResolver({
-    FlmSession? session,
-  }) : _session = session ?? FlmSession.instance;
+  CurriculumResolver({FlmSession? session})
+    : _session = session ?? FlmSession.instance;
 
-  Future<CurriculumMatchResult?> resolve(
-    String input,
-  ) async {
-    final userCode =
-        input.trim().toUpperCase();
+  Future<CurriculumMatchResult?> resolve(String input) async {
+    final userCode = input.trim().toUpperCase();
 
     if (userCode.isEmpty) {
-      throw ArgumentError(
-        'Curriculum code cannot be empty.',
-      );
+      throw ArgumentError('Curriculum code cannot be empty.');
     }
 
     final parts = userCode
         .split('_')
-        .where(
-          (part) => part.trim().isNotEmpty,
-        )
-        .map(
-          (part) => part.trim().toUpperCase(),
-        )
+        .where((part) => part.trim().isNotEmpty)
+        .map((part) => part.trim().toUpperCase())
         .toList();
 
     if (parts.length < 2) {
-      throw FormatException(
-        'Invalid curriculum code: $userCode',
-      );
+      throw FormatException('Invalid curriculum code: $userCode');
     }
 
     // Example:
@@ -61,8 +49,7 @@ class CurriculumResolver {
     // Both search FLM using:
     //
     // BIT_SE
-    final baseCode =
-        '${parts[0]}_${parts[1]}';
+    final baseCode = '${parts[0]}_${parts[1]}';
 
     // Find the user's cohort / intake token.
     //
@@ -76,32 +63,22 @@ class CurriculumResolver {
 
     for (final part in parts.reversed) {
       if (_isCohortToken(part)) {
-        intakeCode =
-            _normalizeCohortToken(part);
+        intakeCode = _normalizeCohortToken(part);
 
         break;
       }
     }
 
-    debugPrint(
-      'Resolver base code: $baseCode',
-    );
+    debugPrint('Resolver base code: $baseCode');
 
-    debugPrint(
-      'Resolver cohort code: $intakeCode',
-    );
+    debugPrint('Resolver cohort code: $intakeCode');
 
     // Search FLM by curriculum CODE only.
-    await _session.searchCurriculum(
-      baseCode,
-    );
+    await _session.searchCurriculum(baseCode);
 
-    final candidates =
-        await _session.getCurriculumCodes();
+    final candidates = await _session.getCurriculumCodes();
 
-    debugPrint(
-      'FLM candidates: $candidates',
-    );
+    debugPrint('FLM candidates: $candidates');
 
     if (candidates.isEmpty) {
       return null;
@@ -112,8 +89,7 @@ class CurriculumResolver {
     // --------------------------------------------------
 
     for (final candidate in candidates) {
-      if (_normalizeCode(candidate) ==
-          _normalizeCode(userCode)) {
+      if (_normalizeCode(candidate) == _normalizeCode(userCode)) {
         return CurriculumMatchResult(
           userCode: userCode,
           baseCode: baseCode,
@@ -150,26 +126,15 @@ class CurriculumResolver {
     // --------------------------------------------------
 
     if (intakeCode != null) {
-      final matches =
-          candidates.where(
-        (candidate) {
-          if (!_candidateMatchesBase(
-            candidate,
-            baseCode,
-          )) {
-            return false;
-          }
+      final matches = candidates.where((candidate) {
+        if (!_candidateMatchesBase(candidate, baseCode)) {
+          return false;
+        }
 
-          final candidateTokens =
-              _extractCandidateCohortTokens(
-            candidate,
-          );
+        final candidateTokens = _extractCandidateCohortTokens(candidate);
 
-          return candidateTokens.contains(
-            intakeCode,
-          );
-        },
-      ).toList();
+        return candidateTokens.contains(intakeCode);
+      }).toList();
 
       debugPrint(
         'Cohort matches for $intakeCode: '
@@ -201,58 +166,38 @@ class CurriculumResolver {
     return null;
   }
 
-  bool _candidateMatchesBase(
-    String candidate,
-    String baseCode,
-  ) {
-    final normalizedCandidate =
-        _normalizeCode(candidate);
+  bool _candidateMatchesBase(String candidate, String baseCode) {
+    final normalizedCandidate = _normalizeCode(candidate);
 
-    final normalizedBase =
-        _normalizeCode(baseCode);
+    final normalizedBase = _normalizeCode(baseCode);
 
-    return normalizedCandidate.startsWith(
-      normalizedBase,
-    );
+    return normalizedCandidate.startsWith(normalizedBase);
   }
 
-  List<String>
-      _extractCandidateCohortTokens(
-    String curriculumCode,
-  ) {
-    final normalized =
-        curriculumCode
-            .toUpperCase()
-            .replaceAll(',', '_')
-            .replaceAll('-', '_');
+  List<String> _extractCandidateCohortTokens(String curriculumCode) {
+    final normalized = curriculumCode
+        .toUpperCase()
+        .replaceAll(',', '_')
+        .replaceAll('-', '_');
 
     final parts = normalized
         .split('_')
-        .map(
-          (part) => part.trim(),
-        )
-        .where(
-          (part) => part.isNotEmpty,
-        );
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty);
 
     final tokens = <String>[];
 
     for (final part in parts) {
       if (_isCohortToken(part)) {
-        tokens.add(
-          _normalizeCohortToken(part),
-        );
+        tokens.add(_normalizeCohortToken(part));
       }
     }
 
     return tokens;
   }
 
-  bool _isCohortToken(
-    String value,
-  ) {
-    final token =
-        value.trim().toUpperCase();
+  bool _isCohortToken(String value) {
+    final token = value.trim().toUpperCase();
 
     // Matches:
     //
@@ -260,16 +205,11 @@ class CurriculumResolver {
     // 19A
     // K18D
     // K19A
-    return RegExp(
-      r'^K?\d{2}[A-Z]$',
-    ).hasMatch(token);
+    return RegExp(r'^K?\d{2}[A-Z]$').hasMatch(token);
   }
 
-  String _normalizeCohortToken(
-    String value,
-  ) {
-    var token =
-        value.trim().toUpperCase();
+  String _normalizeCohortToken(String value) {
+    var token = value.trim().toUpperCase();
 
     // K18D -> 18D
     // K20A -> 20A
@@ -283,15 +223,7 @@ class CurriculumResolver {
     return token;
   }
 
-  String _normalizeCode(
-    String value,
-  ) {
-    return value
-        .trim()
-        .toUpperCase()
-        .replaceAll(
-          RegExp(r'\s+'),
-          '',
-        );
+  String _normalizeCode(String value) {
+    return value.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
   }
 }
