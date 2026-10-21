@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../ai/ask_fpt_controller.dart';
 import '../database/database_repository.dart';
+import '../database/database_updater.dart';
 import '../notes/json_markdown_export_service.dart';
 import '../obsidian/obsidian_service.dart';
 import '../settings/app_settings.dart';
@@ -31,6 +32,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   late final AskFptController _askFptController;
   late final JsonMarkdownExportService _exportService;
   final ObsidianService _obsidianService = ObsidianService();
+  late final DatabaseUpdater _dataUpdater;
   String? _vaultPath;
   String? _notesFocusItemId;
   String? _notesOpenItemId;
@@ -40,6 +42,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     super.initState();
     _askFptController = AskFptController(widget.repository);
     _exportService = JsonMarkdownExportService(widget.repository);
+    _dataUpdater = DatabaseUpdater(widget.repository.root)
+      ..addListener(_dataUpdateChanged);
+    unawaited(_checkDataUpdates());
     _initialize();
   }
 
@@ -50,8 +55,21 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
   @override
   void dispose() {
+    _dataUpdater.removeListener(_dataUpdateChanged);
+    _dataUpdater.dispose();
     _askFptController.dispose();
     super.dispose();
+  }
+
+  void _dataUpdateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _checkDataUpdates({bool force = false}) async {
+    if (await _dataUpdater.check(force: force)) {
+      await widget.repository.initialize();
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _refreshCurrentCurriculum() async {
@@ -127,6 +145,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     appBar: AppBar(
       title: const Text('FPT Knowledge'),
       actions: [
+        Tooltip(
+          message: _dataUpdater.detail ?? _dataUpdater.label,
+          child: TextButton.icon(
+            onPressed: () => _checkDataUpdates(force: true),
+            icon: const Icon(Icons.system_update_alt),
+            label: Text(_dataUpdater.label),
+          ),
+        ),
         TextButton.icon(
           onPressed: () => Navigator.of(
             context,

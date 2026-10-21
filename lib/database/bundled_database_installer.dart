@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 
+import 'database_integrity.dart';
+
 typedef DatabaseAssetLoader = Future<Uint8List> Function();
 
 class DatabaseValidation {
@@ -26,10 +28,12 @@ class BundledDatabaseInstaller {
 
   final Directory databaseDirectory;
   final DatabaseAssetLoader _assetLoader;
+  final Future<Map<String, dynamic>> Function() _metadataLoader;
 
   BundledDatabaseInstaller({
     Directory? databaseDirectory,
     DatabaseAssetLoader? assetLoader,
+    Future<Map<String, dynamic>> Function()? metadataLoader,
   }) : databaseDirectory =
            databaseDirectory ??
            Directory(
@@ -37,6 +41,16 @@ class BundledDatabaseInstaller {
              '${Platform.pathSeparator}FPT Knowledge'
              '${Platform.pathSeparator}Database',
            ),
+       _metadataLoader =
+           metadataLoader ??
+           (() async => Map<String, dynamic>.from(
+             jsonDecode(
+                   await rootBundle.loadString(
+                     'assets/database/bundle_info.json',
+                   ),
+                 )
+                 as Map,
+           )),
        _assetLoader =
            assetLoader ??
            (() async {
@@ -48,27 +62,107 @@ class BundledDatabaseInstaller {
            });
 
   Future<Directory> ensureInstalled() async {
-    final bundleBytes = await _assetLoader();
-    final bundledMetadata = _readBundledMetadata(bundleBytes);
-    final local = await validate(databaseDirectory);
+    final bundledMetadata = await _metadataLoader();
+    await recoverInterruptedInstall();
+    final local = await validate(databaseDirectory, deep: false);
 
     if (local.valid &&
         !_bundleIsNewer(bundledMetadata, local.metadata, local.index)) {
-      return databaseDirectory;
+      final markerFile = File('${databaseDirectory.path}/.installation.json');
+      try {
+        final marker = _decodeObject(await markerFile.readAsString());
+        if (marker['databaseVersion'] == local.metadata?['databaseVersion'] &&
+            await File(
+              '${databaseDirectory.path}/search_index.json',
+            ).exists() &&
+            await File(
+              '${databaseDirectory.path}/managed_manifest.json',
+            ).exists() &&
+            marker['builtAt'] == local.metadata?['builtAt'] &&
+            marker['indexBytes'] ==
+                await File(
+                  '${databaseDirectory.path}/database_index.json',
+                ).length() &&
+            (marker['bundleSha256'] == bundledMetadata['databaseSha256'] ||
+                (local.metadata?['databaseVersion'] as int? ?? 0) >
+                    (bundledMetadata['databaseVersion'] as int? ?? 0))) {
+          return databaseDirectory;
+        }
+      } catch (_) {
+        /* Legacy or interrupted marker: validate once. */
+      }
+      final validated = await validate(databaseDirectory);
+      final localManifest = File(
+        '${databaseDirectory.path}/managed_manifest.json',
+      );
+      final matchesBundle =
+          await localManifest.exists() &&
+          databaseHash(await localManifest.readAsBytes()) ==
+              bundledMetadata['managedManifestSha256'];
+      final localIsNewer =
+          (local.metadata?['databaseVersion'] as int? ?? 0) >
+          (bundledMetadata['databaseVersion'] as int? ?? 0);
+      if (validated.valid &&
+          local.metadata != null &&
+          (matchesBundle || localIsNewer)) {
+        await writeInstallationMarker(
+          databaseDirectory,
+          bundledMetadata['databaseSha256']?.toString(),
+        );
+        return databaseDirectory;
+      }
     }
 
-    await _installSafely(bundleBytes);
-    final installed = await validate(databaseDirectory);
-    if (!installed.valid) {
-      throw StateError(
-        'Bundled database installation failed validation: '
-        '${installed.error ?? 'unknown error'}',
-      );
+    final bundleBytes = await _assetLoader();
+    if (databaseHash(bundleBytes) != bundledMetadata['databaseSha256']) {
+      throw StateError('Bundled database checksum does not match.');
     }
+    _readBundledMetadata(bundleBytes);
+    await _installSafely(bundleBytes);
+    await writeInstallationMarker(
+      databaseDirectory,
+      bundledMetadata['databaseSha256']?.toString(),
+    );
     return databaseDirectory;
   }
 
-  Future<DatabaseValidation> validate(Directory root) async {
+  Future<void> recoverInterruptedInstall() async {
+    final backup = Directory('${databaseDirectory.path}.backup');
+    if (!await databaseDirectory.exists() && await backup.exists()) {
+      final previous = await validate(backup);
+      if (previous.valid) await backup.rename(databaseDirectory.path);
+    }
+  }
+
+  static Future<void> writeInstallationMarker(
+    Directory root,
+    String? bundleHash,
+  ) async {
+    final metadata =
+        jsonDecode(
+              await File('${root.path}/release_metadata.json').readAsString(),
+            )
+            as Map;
+    final marker = File('${root.path}/.installation.json');
+    final temporary = File('${marker.path}.tmp');
+    await temporary.writeAsString(
+      jsonEncode({
+        'databaseVersion': metadata['databaseVersion'],
+        'builtAt': metadata['builtAt'],
+        'bundleSha256': bundleHash,
+        'indexBytes': await File('${root.path}/database_index.json').length(),
+      }),
+      flush: true,
+    );
+    // Windows rename does not replace an existing file.
+    if (await marker.exists()) await marker.delete();
+    await temporary.rename(marker.path);
+  }
+
+  Future<DatabaseValidation> validate(
+    Directory root, {
+    bool deep = true,
+  }) async {
     try {
       final indexFile = File(
         '${root.path}${Platform.pathSeparator}database_index.json',
@@ -100,16 +194,19 @@ class BundledDatabaseInstaller {
         );
       }
 
-      final curriculumFiles = await _readableJsonCount(curricula);
-      final subjectFiles = await _readableJsonCount(subjects);
-      if (curriculumFiles < curriculumCount || subjectFiles < subjectCount) {
-        return DatabaseValidation(
-          valid: false,
-          error:
-              'Database records are missing or unreadable '
-              '($curriculumFiles/$curriculumCount curricula, '
-              '$subjectFiles/$subjectCount subjects).',
-        );
+      if (deep) {
+        final curriculumFiles = await _readableJsonCount(curricula);
+        final subjectFiles = await _readableJsonCount(subjects);
+        if (curriculumFiles < curriculumCount || subjectFiles < subjectCount) {
+          return DatabaseValidation(
+            valid: false,
+            error:
+                'Database records are missing or unreadable '
+                '($curriculumFiles/$curriculumCount curricula, '
+                '$subjectFiles/$subjectCount subjects).',
+          );
+        }
+        await verifyManagedDatabase(root);
       }
 
       Map<String, dynamic>? metadata;
@@ -193,12 +290,8 @@ class BundledDatabaseInstaller {
   Future<void> _installSafely(Uint8List bytes) async {
     final parent = databaseDirectory.parent;
     await parent.create(recursive: true);
-    final temporary = Directory(
-      '${parent.path}${Platform.pathSeparator}Database.installing',
-    );
-    final backup = Directory(
-      '${parent.path}${Platform.pathSeparator}Database.backup',
-    );
+    final temporary = Directory('${databaseDirectory.path}.installing');
+    final backup = Directory('${databaseDirectory.path}.backup');
     if (await temporary.exists()) {
       await temporary.delete(recursive: true);
     }
@@ -206,14 +299,20 @@ class BundledDatabaseInstaller {
 
     try {
       final archive = ZipDecoder().decodeBytes(bytes);
+      final seen = <String>{};
+      var expandedSize = 0;
       for (final entry in archive.files.where((item) => item.isFile)) {
         const prefix = 'Database/';
-        if (!entry.name.startsWith(prefix)) continue;
+        if (!entry.name.startsWith(prefix)) {
+          throw StateError('Unexpected database ZIP root');
+        }
         final relative = entry.name.substring(prefix.length);
-        if (relative.isEmpty ||
-            relative.contains('..') ||
-            relative.startsWith('/') ||
-            relative.startsWith('\\')) {
+        expandedSize += entry.size;
+        if (!isManagedDatabasePath(relative) ||
+            !seen.add(relative.toLowerCase()) ||
+            entry.isSymbolicLink ||
+            expandedSize > 250 * 1024 * 1024 ||
+            seen.length > 20000) {
           throw StateError('Unsafe database ZIP entry: ${entry.name}');
         }
         final target = File(

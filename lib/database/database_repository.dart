@@ -70,6 +70,8 @@ class DatabaseRepository {
       : const [];
 
   Future<void> initialize() async {
+    _searchIndex = null;
+    _searchIndexFuture = null;
     _index = await _readObject(
       File('${root.path}${Platform.pathSeparator}database_index.json'),
     );
@@ -218,6 +220,33 @@ class DatabaseRepository {
   }
 
   Future<List<DatabaseSearchResult>> _buildSearchIndex() async {
+    final cached = File('${root.path}/search_index.json');
+    if (await cached.exists()) {
+      final json = await _readObject(cached);
+      final rawRecords = json['records'];
+      if (rawRecords is List) {
+        final values =
+            rawRecords
+                .whereType<Map>()
+                .map(
+                  (raw) => DatabaseSearchResult(
+                    type: raw['type'].toString(),
+                    code: raw['code'].toString(),
+                    name: raw['name'].toString(),
+                    searchableText: normalizeCurriculumSearchText(
+                      raw['searchableText'].toString(),
+                    ),
+                  ),
+                )
+                .toList()
+              ..sort((a, b) {
+                final type = a.type.compareTo(b.type);
+                return type != 0 ? type : a.code.compareTo(b.code);
+              });
+        _searchIndex = values;
+        return values;
+      }
+    }
     final records = <DatabaseSearchResult>[];
     final curricula = index['curricula'];
     if (curricula is List) {

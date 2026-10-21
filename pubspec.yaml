@@ -2,7 +2,7 @@ name: fptu_se_brain
 description: "FPT curriculum organizer with Obsidian integration."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.12.2
@@ -13,6 +13,7 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   archive: ^4.0.7
+  crypto: ^3.0.7
   webview_flutter_windows: ^1.2.0
 dev_dependencies:
   flutter_test:
@@ -24,3 +25,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/database/fpt_knowledge_database.zip
+    - assets/database/bundle_info.json

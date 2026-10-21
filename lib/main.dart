@@ -1,11 +1,25 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'database/bundled_database_installer.dart';
 import 'database/database_repository.dart';
 import 'screens/student_home_screen.dart';
+import 'release_verification.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (arguments.contains('--verify-release-online')) {
+    exit(await verifyRelease(online: true));
+  }
+  if (arguments.contains('--verify-release-offline')) {
+    final result = await HttpOverrides.runZoned(
+      () => verifyRelease(online: false),
+      createHttpClient: (_) =>
+          throw const SocketException('Release verification: network disabled'),
+    );
+    exit(result);
+  }
   runApp(const FptKnowledgeApp());
 }
 

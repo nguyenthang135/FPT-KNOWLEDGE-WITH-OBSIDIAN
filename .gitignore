@@ -35,6 +35,23 @@ migrate_working_dir/
 
 # Local launcher containing the Groq API key
 /start-fpt-knowledge-groq.bat
+.env*
+!.env.example
+.dev.vars*
+PRIVATE_GROQ_INPUT/
+*PRIVATE*HANDOFF*.zip
+/dist/
+/release-staging/
+/Database/
+/node_modules/
+**/node_modules/
+**/.wrangler/
+**/.gateway-state/
+*.pfx
+*.p12
+*.key
+/api code*.txt
+/.private-build/
 
 # Symbolication related
 app.*.symbols

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "fptu_se_brain" "\0"
+            VALUE "CompanyName", "FPT Knowledge project" "\0"
+            VALUE "FileDescription", "FPT Knowledge" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "fptu_se_brain" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 FPT Knowledge contributors." "\0"
             VALUE "OriginalFilename", "fptu_se_brain.exe" "\0"
-            VALUE "ProductName", "fptu_se_brain" "\0"
+            VALUE "ProductName", "FPT Knowledge" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

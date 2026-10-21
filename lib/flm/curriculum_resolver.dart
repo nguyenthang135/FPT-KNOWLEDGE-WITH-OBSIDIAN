@@ -226,4 +226,4 @@ class CurriculumResolver {
   String _normalizeCode(String value) {
     return value.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
   }
-}
+}//hey

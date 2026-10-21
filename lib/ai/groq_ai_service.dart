@@ -37,6 +37,9 @@ class GroqDiagnostics {
   final String endpointHost;
   final GroqRequestStatus lastStatus;
   final String? lastError;
+  final int? lastHttpStatus;
+  final int answerSuccessCount;
+  final int plannerSuccessCount;
 
   const GroqDiagnostics({
     required this.keyDetected,
@@ -44,6 +47,9 @@ class GroqDiagnostics {
     required this.endpointHost,
     required this.lastStatus,
     required this.lastError,
+    this.lastHttpStatus,
+    this.answerSuccessCount = 0,
+    this.plannerSuccessCount = 0,
   });
 }
 
@@ -74,30 +80,72 @@ typedef GroqTransport =
 
 class GroqAiService {
   static const defaultModel = 'openai/gpt-oss-20b';
+  static const _compiledKey = String.fromEnvironment('GROQ_API_KEY');
+  static const _compiledModel = String.fromEnvironment('GROQ_MODEL');
   static const _defaultEndpoint =
       'https://api.groq.com/openai/v1/chat/completions';
 
   final String? apiKey;
   final String model;
   final String _endpoint;
+  final bool _useGateway;
   final GroqTransport _transport;
   final Duration timeout;
   GroqRequestStatus _lastStatus = GroqRequestStatus.idle;
   String? _lastError;
+  int? _lastHttpStatus;
+  int _answerSuccessCount = 0;
+  int _plannerSuccessCount = 0;
 
   GroqAiService({
     String? apiKey,
     String? model,
+    String? gatewayUrl,
     @visibleForTesting String? endpoint,
     GroqTransport? transport,
     this.timeout = const Duration(seconds: 20),
-  }) : apiKey = apiKey ?? Platform.environment['GROQ_API_KEY'],
-       model = (model ?? Platform.environment['GROQ_MODEL'] ?? defaultModel)
-           .trim(),
-       _endpoint = endpoint ?? _defaultEndpoint,
+  }) : apiKey =
+           apiKey ??
+           (_compiledKey.isNotEmpty
+               ? _compiledKey
+               : kReleaseMode
+               ? null
+               : Platform.environment['GROQ_API_KEY']),
+       model =
+           (model ??
+                   (_compiledModel.isNotEmpty ? _compiledModel : null) ??
+                   (kReleaseMode ? null : Platform.environment['GROQ_MODEL']) ??
+                   defaultModel)
+               .trim(),
+       _useGateway =
+           (gatewayUrl ?? const String.fromEnvironment('FPT_AI_GATEWAY_URL'))
+               .trim()
+               .isNotEmpty,
+       _endpoint =
+           (gatewayUrl ?? const String.fromEnvironment('FPT_AI_GATEWAY_URL'))
+               .trim()
+               .isNotEmpty
+           ? (gatewayUrl ?? const String.fromEnvironment('FPT_AI_GATEWAY_URL'))
+                 .trim()
+           : endpoint ?? _defaultEndpoint,
        _transport = transport ?? _defaultTransport;
 
-  bool get configured => apiKey?.trim().isNotEmpty == true;
+  bool get configured =>
+      _useGateway ? _validGateway : apiKey?.trim().isNotEmpty == true;
+
+  bool get _validGateway {
+    final uri = Uri.tryParse(_endpoint);
+    return uri != null &&
+        uri.scheme == 'https' &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty &&
+        !uri.hasQuery &&
+        !uri.hasFragment &&
+        uri.host != 'localhost' &&
+        !uri.host.endsWith('.invalid') &&
+        !uri.host.contains('example.') &&
+        InternetAddress.tryParse(uri.host) == null;
+  }
 
   GroqDiagnostics get diagnostics => GroqDiagnostics(
     keyDetected: configured,
@@ -105,6 +153,9 @@ class GroqAiService {
     endpointHost: Uri.parse(_endpoint).host,
     lastStatus: _lastStatus,
     lastError: _lastError,
+    lastHttpStatus: _lastHttpStatus,
+    answerSuccessCount: _answerSuccessCount,
+    plannerSuccessCount: _plannerSuccessCount,
   );
 
   Future<GroqAnswer> answer({
@@ -112,9 +163,11 @@ class GroqAiService {
     required Map<String, dynamic> context,
     required bool english,
   }) async {
-    final key = apiKey?.trim() ?? '';
-    if (key.isEmpty) {
-      _record(GroqRequestStatus.missingKey, 'GROQ_API_KEY is not available.');
+    if (!configured) {
+      _record(
+        GroqRequestStatus.missingKey,
+        'Online AI is not configured. Offline answers remain available.',
+      );
       return const GroqAnswer.failure(GroqFailureKind.unavailable);
     }
     final requestBody = jsonEncode({
@@ -155,9 +208,11 @@ class GroqAiService {
     required Map<String, dynamic> knownContext,
     required bool english,
   }) async {
-    final key = apiKey?.trim() ?? '';
-    if (key.isEmpty) {
-      _record(GroqRequestStatus.missingKey, 'GROQ_API_KEY is not available.');
+    if (!configured) {
+      _record(
+        GroqRequestStatus.missingKey,
+        'Online AI is not configured. Offline answers remain available.',
+      );
       return const GroqAnswer.failure(GroqFailureKind.unavailable);
     }
     final requestBody = jsonEncode({
@@ -192,21 +247,31 @@ class GroqAiService {
         },
       ],
     });
-    return _complete(requestBody, allowPlainText: false);
+    return _complete(requestBody, allowPlainText: false, isPlanner: true);
   }
 
   Future<GroqAnswer> _complete(
     String requestBody, {
     bool allowPlainText = true,
+    bool isPlanner = false,
   }) async {
     final key = apiKey?.trim() ?? '';
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
+        _lastHttpStatus = null;
         final response = await _transport(Uri.parse(_endpoint), {
-          HttpHeaders.authorizationHeader: 'Bearer $key',
+          if (!_useGateway) HttpHeaders.authorizationHeader: 'Bearer $key',
           HttpHeaders.contentTypeHeader: 'application/json',
         }, requestBody).timeout(timeout);
+        _lastHttpStatus = response.statusCode;
         if (response.statusCode == 429) {
+          if (_useGateway) {
+            _record(
+              GroqRequestStatus.rateLimited,
+              'Online AI quota reached. Please try again later.',
+            );
+            return const GroqAnswer.failure(GroqFailureKind.rateLimited);
+          }
           if (attempt < 2) {
             await Future<void>.delayed(
               Duration(milliseconds: 350 * (attempt + 1)),
@@ -265,6 +330,11 @@ class GroqAiService {
           return const GroqAnswer.failure(GroqFailureKind.invalidResponse);
         }
         _record(GroqRequestStatus.success, null);
+        if (isPlanner) {
+          _plannerSuccessCount++;
+        } else {
+          _answerSuccessCount++;
+        }
         return GroqAnswer.success(safeText ?? text, structured: structured);
       } on TimeoutException catch (error) {
         if (attempt == 2) {

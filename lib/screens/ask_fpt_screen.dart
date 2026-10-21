@@ -314,7 +314,7 @@ class _GroqStatusChip extends StatelessWidget {
     };
     return Tooltip(
       message:
-          'Groq key detected: ${diagnostics.keyDetected ? 'yes' : 'no'}\n'
+          'Online AI configured: ${diagnostics.keyDetected ? 'yes' : 'no'}\n'
           'Model: ${diagnostics.model}\n'
           'Endpoint: ${diagnostics.endpointHost}\n'
           'Last status: ${diagnostics.lastStatus.name}'

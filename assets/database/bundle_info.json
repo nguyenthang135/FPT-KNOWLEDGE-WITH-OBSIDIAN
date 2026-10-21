@@ -1,0 +1,14 @@
+{
+  "databaseVersion": 1,
+  "schemaVersion": 1,
+  "builtAt": "2026-09-23T11:46:55.449269Z",
+  "curriculumCount": 490,
+  "subjectCount": 1313,
+  "syllabusCount": 1313,
+  "source": "FPT Learning Materials",
+  "databaseSha256": "472e8ba468d69f8a9a8ec58af34f4ce106b41b549063c5a20b1375d1ef2147dd",
+  "archiveBytes": 4583066,
+  "managedFiles": 2297,
+  "managedManifestSha256": "558c551f81a6097881337eb0075fd222b81bcccaaaa1892c352b558bcf8cb5d8",
+  "subjectsWithOutcomes": 690
+}
