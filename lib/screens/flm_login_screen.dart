@@ -5,10 +5,13 @@ import 'package:webview_flutter_windows/webview_flutter_windows.dart';
 
 import '../flm/flm_session.dart';
 import '../settings/app_settings.dart';
+import '../database/database_repository.dart';
 import 'curriculum_setup_screen.dart';
+import 'flm_database_update_screen.dart';
 
 class FlmLoginScreen extends StatefulWidget {
-  const FlmLoginScreen({super.key});
+  final DatabaseRepository? repository;
+  const FlmLoginScreen({super.key, this.repository});
 
   @override
   State<FlmLoginScreen> createState() => _FlmLoginScreenState();
@@ -112,7 +115,11 @@ class _FlmLoginScreenState extends State<FlmLoginScreen> {
     _navigatingAway = true;
 
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CurriculumSetupScreen()),
+      MaterialPageRoute(
+        builder: (_) => widget.repository == null
+            ? const CurriculumSetupScreen()
+            : FlmDatabaseUpdateScreen(repository: widget.repository!),
+      ),
     );
   }
 

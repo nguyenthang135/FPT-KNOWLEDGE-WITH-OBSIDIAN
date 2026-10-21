@@ -146,7 +146,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       title: const Text('FPT Knowledge'),
       actions: [
         Tooltip(
-          message: _dataUpdater.detail ?? _dataUpdater.label,
+          message:
+              'Published database feed, not a live FLM check. '
+              '${_dataUpdater.detail ?? _dataUpdater.label}',
           child: TextButton.icon(
             onPressed: () => _checkDataUpdates(force: true),
             icon: const Icon(Icons.system_update_alt),
@@ -154,9 +156,15 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           ),
         ),
         TextButton.icon(
-          onPressed: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const FlmLoginScreen())),
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => FlmLoginScreen(repository: widget.repository),
+              ),
+            );
+            await widget.repository.initialize();
+            if (mounted) setState(() {});
+          },
           icon: const Icon(Icons.admin_panel_settings_outlined),
           label: const Text('Connect to FLM'),
         ),

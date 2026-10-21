@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'database/bundled_database_installer.dart';
 import 'database/database_repository.dart';
 import 'screens/student_home_screen.dart';
+import 'screens/flm_login_screen.dart';
 import 'release_verification.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -76,6 +78,9 @@ class _DatabaseBootstrapScreenState extends State<DatabaseBootstrapScreen> {
   Widget build(BuildContext context) {
     final repository = _repository;
     if (repository != null) {
+      if (kDebugMode && const bool.fromEnvironment('FPT_VERIFY_FLM_UPDATE')) {
+        return FlmLoginScreen(repository: repository);
+      }
       return StudentHomeScreen(repository: repository);
     }
     return Scaffold(

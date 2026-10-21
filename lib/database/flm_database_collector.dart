@@ -47,6 +47,10 @@ class FlmDatabaseCollector {
     _pauseRequested = true;
   }
 
+  // The student updater supplies an isolated checkpoint store, never the live DB.
+  Future<CollectedCurriculumData> fetchCurriculumRecord(String code) =>
+      _retry(() => _extractCurriculum(code));
+
   Future<Map<String, dynamic>?> readIndex() async {
     await store.initialize();
     return store.readRoot('database_index.json');

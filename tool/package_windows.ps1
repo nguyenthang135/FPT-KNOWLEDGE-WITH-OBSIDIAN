@@ -7,6 +7,7 @@ param(
   [string]$PortableDirectory = '',
   [switch]$LocalCandidate,
   [switch]$SkipBuild,
+  [switch]$VerifyBeforeInstall,
   [string]$InnoCompiler = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -96,6 +97,9 @@ if (Test-Path -LiteralPath $archive) {
 Compress-Archive -LiteralPath $appFolder -DestinationPath $archive -CompressionLevel Optimal
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 "$hash  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
+if ($VerifyBeforeInstall) {
+  & (Join-Path $PSScriptRoot 'verify_portable.ps1') -Archive $archive -Online
+}
 if (!$LocalCandidate) {
   if (!$PortableDirectory) { $PortableDirectory = Join-Path (Split-Path $projectRoot -Parent) 'FPT Knowledge' }
   $destination = [IO.Path]::GetFullPath($PortableDirectory)

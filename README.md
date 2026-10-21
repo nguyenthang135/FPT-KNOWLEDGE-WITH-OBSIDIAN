@@ -17,6 +17,25 @@ FAP. It does not manage your grades, attendance or course registration.
 
 [Download FPT Knowledge for Windows](https://github.com/nguyenthang135/FPT-KNOWLEDGE-WITH-OBSIDIAN/releases/latest)
 
+### Fresh data from FLM (v1.0.2)
+
+Use **Connect to FLM**, sign in with your own account, then click **Check for
+Updates**. There is no curriculum-code setup or manual extract/build step.
+The quick check discovers new curriculum IDs and installs their missing academic
+details automatically. It does **not** certify that existing FLM content is unchanged:
+the list does not provide an authoritative content revision. Choose **Also verify
+existing content (slow)** to compare visible details, including referenced syllabi.
+An interrupted download can resume; a partial scan never removes installed records.
+Search and installed counts refresh after a successful update.
+If FLM reports no visible syllabus for a new subject, its curriculum row is kept
+and the exact missing code is reported; no syllabus content is fabricated.
+Quick checks cache that availability result for 24 hours; deeper checking retries
+immediately. Option slots such as `EL_CK*1` remain options, not bogus subject files.
+
+The bundled snapshot stays immutable. Your working database in
+`%APPDATA%\FPT Knowledge\Database` is required for offline use and local updates;
+do not delete it as extraction clutter. Personal notes and settings remain separate.
+
 1. Download the named **Windows-Portable.zip** asset, not Source code ZIP.
 2. Extract the entire **FPT Knowledge** folder.
 3. Double-click **FPT Knowledge.exe**; keep its DLLs and `data` folder beside it.

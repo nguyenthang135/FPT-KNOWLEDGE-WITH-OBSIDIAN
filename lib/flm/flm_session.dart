@@ -12,6 +12,8 @@ class FlmDiscoverySnapshot {
   final int rowsFound;
   final List<String> codes;
   final int? resultCount;
+  final List<String> headers;
+  final int approximateBytes;
 
   const FlmDiscoverySnapshot({
     required this.currentUrl,
@@ -19,6 +21,8 @@ class FlmDiscoverySnapshot {
     required this.rowsFound,
     required this.codes,
     required this.resultCount,
+    this.headers = const [],
+    this.approximateBytes = 0,
   });
 }
 
@@ -90,6 +94,22 @@ document.body
   // LOGOUT / SWITCH ACCOUNT
   // --------------------------------------------------
 
+  Future<bool> loginRequired() async {
+    final result = await controller.executeScript(r'''
+(() => {
+  const text = (document.body?.innerText || '').toLowerCase();
+  const password = Array.from(document.querySelectorAll('input[type="password"]'))
+    .some(input => input.offsetParent !== null);
+  return password || /\/(login|signin)(?:[/?#]|$)/i.test(location.href) ||
+    (/\/Home(?:[/?#]|$)/i.test(location.href) &&
+      !text.includes("student's features") && !text.includes('view curriculum'));
+})()
+''');
+    final required = result.toString().toLowerCase().contains('true');
+    if (required) isAuthenticated = false;
+    return required;
+  }
+
   Future<void> logout() async {
     await initialize();
 
@@ -119,8 +139,8 @@ document.body
     );
   }
 
-  Future<void> searchCurriculum(String code) async {
-    await openCurriculumSearch();
+  Future<void> searchCurriculum(String code, {bool openPage = true}) async {
+    if (openPage) await openCurriculumSearch();
 
     final encodedCode = jsonEncode(code.trim());
 
@@ -329,6 +349,8 @@ document.body
     loginDetected,
     rowsFound,
     codes,
+    headers: table ? table.headers : [],
+    approximateBytes: new TextEncoder().encode(document.documentElement.outerHTML).length,
     resultCount: countMatch ? Number(countMatch[1]) : null
   });
 })();
@@ -347,6 +369,8 @@ document.body
       rowsFound: int.tryParse(decoded['rowsFound']?.toString() ?? '') ?? 0,
       codes: codes,
       resultCount: int.tryParse(decoded['resultCount']?.toString() ?? ''),
+      headers: (decoded['headers'] as List? ?? []).cast<String>(),
+      approximateBytes: (decoded['approximateBytes'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -356,6 +380,7 @@ document.body
 
   Future<List<String>> discoverCurriculumCodes({
     void Function(FlmDiscoverySnapshot value)? onDiagnostics,
+    bool verifyKnownTarget = true,
   }) async {
     await openCurriculumSearch();
 
@@ -395,6 +420,8 @@ document.body
             rowsFound: snapshot.rowsFound,
             codes: discovered.toList(),
             resultCount: snapshot.resultCount,
+            headers: snapshot.headers,
+            approximateBytes: snapshot.approximateBytes,
           ),
         );
 
@@ -408,9 +435,11 @@ document.body
     // Prove the known curriculum first. The collector also places it first in
     // the extraction order before expanding to every discovered curriculum.
     const knownTarget = 'BIT_SE_K18D_19A';
-    await searchCurriculum(knownTarget);
-    await crawlCurrentResults();
-    if (!discovered.contains(knownTarget)) {
+    if (verifyKnownTarget) {
+      await searchCurriculum(knownTarget, openPage: false);
+      await crawlCurrentResults();
+    }
+    if (verifyKnownTarget && !discovered.contains(knownTarget)) {
       throw StateError(
         'FLM did not return the required test curriculum $knownTarget. '
         'Check FLM page compatibility.',
@@ -420,7 +449,7 @@ document.body
     // FLM does not return a catalogue for an empty keyword. Curriculum codes
     // use "_" as their segment delimiter, so this query discovers the full
     // catalogue without hard-coding a program.
-    await searchCurriculum('_');
+    await searchCurriculum('_', openPage: false);
     final broadCount = await crawlCurrentResults();
 
     // Compatibility fallback for an FLM deployment that treats "_" as a
@@ -429,7 +458,7 @@ document.body
     if (broadCount == 0) {
       const partitions = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       for (final query in partitions.split('')) {
-        await searchCurriculum(query);
+        await searchCurriculum(query, openPage: false);
         await crawlCurrentResults();
       }
     }

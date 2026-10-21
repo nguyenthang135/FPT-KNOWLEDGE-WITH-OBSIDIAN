@@ -148,6 +148,11 @@ class SyllabusDetailResult {
   });
 }
 
+class FlmSyllabusUnavailable implements Exception {
+  final String code;
+  const FlmSyllabusUnavailable(this.code);
+}
+
 class FlmSyllabusService {
   FlmSyllabusService({FlmSession? session})
     : _session = session ?? FlmSession.instance;
@@ -162,6 +167,15 @@ class FlmSyllabusService {
     }
 
     await _openSyllabusSearch(code);
+    final noResults = await _session.controller.executeScript(r'''
+/\b0\s+syllabus(?:\(es\)|es)?\s+found\b/i.test(document.body?.innerText || '')
+''');
+    if (noResults.toString().toLowerCase().contains('true')) {
+      if (await _session.loginRequired()) {
+        throw StateError('FLM login expired.');
+      }
+      throw FlmSyllabusUnavailable(code);
+    }
     await _openExactResult(code);
 
     return _extractSyllabus(code);

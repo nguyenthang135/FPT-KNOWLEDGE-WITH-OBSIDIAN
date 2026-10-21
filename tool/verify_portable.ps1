@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory = $true)][string]$Archive,
-  [switch]$Online
+  [switch]$Online,
+  [string]$InstalledDatabase = ''
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
@@ -10,6 +11,13 @@ $exe = Join-Path $testRoot 'FPT Knowledge\FPT Knowledge.exe'
 $profile = Join-Path $testRoot 'isolated-appdata'
 New-Item -ItemType Directory -Path $profile | Out-Null
 [IO.File]::WriteAllText((Join-Path $profile '.fpt-release-verification'), 'isolated release QA')
+if ($InstalledDatabase) {
+  $installedRoot = [IO.Path]::GetFullPath($InstalledDatabase)
+  if (!(Test-Path -LiteralPath (Join-Path $installedRoot 'managed_manifest.json'))) { throw 'Installed database manifest missing.' }
+  $dataParent = Join-Path $profile 'FPT Knowledge'
+  New-Item -ItemType Directory -Path $dataParent | Out-Null
+  Copy-Item -LiteralPath $installedRoot -Destination (Join-Path $dataParent 'Database') -Recurse
+}
 function Invoke-Verification([string]$mode) {
   $info = [Diagnostics.ProcessStartInfo]::new()
   $info.FileName = $exe
@@ -40,6 +48,7 @@ $marker = Join-Path $profile 'FPT Knowledge\Database\.installation.json'
 $markerHash = (Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash
 $markerTime = (Get-Item -LiteralPath $marker).LastWriteTimeUtc
 if ($Online) { Invoke-Verification 'online' }
+if ($InstalledDatabase -and !$Online) { Invoke-Verification 'offline' }
 if ((Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash -ne $markerHash -or
     (Get-Item -LiteralPath $marker).LastWriteTimeUtc -ne $markerTime) { throw 'Restart unnecessarily reinstalled database' }
 Write-Output 'Installation marker preserved across restart.'

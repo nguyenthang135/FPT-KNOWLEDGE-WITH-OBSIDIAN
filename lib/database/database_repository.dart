@@ -77,6 +77,28 @@ class DatabaseRepository {
     );
   }
 
+  // Used only on a private update stage, before it replaces the installed DB.
+  Future<void> rebuildSearchIndex() async {
+    final file = File('${root.path}/search_index.json');
+    if (await file.exists()) await file.delete();
+    await initialize();
+    final records = await _ensureSearchIndex();
+    await file.writeAsString(
+      jsonEncode({
+        'records': [
+          for (final record in records)
+            {
+              'type': record.type,
+              'code': record.code,
+              'name': record.name,
+              'searchableText': record.searchableText,
+            },
+        ],
+      }),
+      flush: true,
+    );
+  }
+
   Future<bool> containsCurriculum(String code) async {
     return File(_recordPath('curricula', code)).exists();
   }

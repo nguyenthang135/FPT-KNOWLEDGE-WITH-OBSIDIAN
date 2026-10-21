@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../flm/curriculum_resolver.dart';
 import '../flm/flm_session.dart';
@@ -213,17 +214,18 @@ class _CurriculumSetupScreenState extends State<CurriculumSetupScreen> {
       appBar: AppBar(
         title: const Text('Choose curriculum'),
         actions: [
-          IconButton(
-            tooltip: 'FLM Database Collector',
-            icon: const Icon(Icons.storage_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const FlmDatabaseCollectorScreen(),
-                ),
-              );
-            },
-          ),
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'FLM Database Collector',
+              icon: const Icon(Icons.storage_outlined),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const FlmDatabaseCollectorScreen(),
+                  ),
+                );
+              },
+            ),
           const SizedBox(width: 8),
         ],
       ),

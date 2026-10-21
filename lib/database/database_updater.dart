@@ -52,7 +52,7 @@ class DatabaseUpdater extends ChangeNotifier {
   String get label => switch (status) {
     DataUpdateStatus.disabled => 'Data updates not published',
     DataUpdateStatus.checking => 'Checking data updates',
-    DataUpdateStatus.upToDate => 'Up to date',
+    DataUpdateStatus.upToDate => 'Database ready',
     DataUpdateStatus.available => 'Update available',
     DataUpdateStatus.updating => 'Updating changed records',
     DataUpdateStatus.updated => 'Updated',
@@ -235,7 +235,21 @@ class DatabaseUpdater extends ChangeNotifier {
     await _cache.writeAsString(jsonEncode(value), flush: true);
   }
 
-  Future<void> _apply(Map<String, dynamic> manifest, List<int> bytes) async {
+  Future<void> _apply(Map<String, dynamic> manifest, List<int> bytes) =>
+      withDatabaseWriteLock(() => _applyLocked(manifest, bytes));
+
+  Future<void> _applyLocked(
+    Map<String, dynamic> manifest,
+    List<int> bytes,
+  ) async {
+    final current =
+        jsonDecode(
+              await File('${root.path}/release_metadata.json').readAsString(),
+            )
+            as Map;
+    if (current['databaseVersion'] != manifest['baseVersion']) {
+      throw const FormatException('Local database changed; check again.');
+    }
     final changed = Map<String, dynamic>.from(manifest['changed'] as Map);
     if (manifest['managedManifest'] != null) {
       changed['managed_manifest.json'] = manifest['managedManifest'];

@@ -3,12 +3,21 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+// Serialize the two supported writers; readers remain available while staging.
+Future<void> _databaseWriter = Future<void>.value();
+Future<T> withDatabaseWriteLock<T>(Future<T> Function() action) {
+  final result = _databaseWriter.then((_) => action());
+  _databaseWriter = result.then<void>((_) {}, onError: (Object _) {});
+  return result;
+}
+
 bool isManagedDatabasePath(String name) =>
     const {
       'database_index.json',
       'release_metadata.json',
       'search_index.json',
       'managed_manifest.json',
+      'flm_sync_state.json',
     }.contains(name) ||
     RegExp(
       r'^(curricula|subjects|specializations)/[A-Za-z0-9_(). -]+\.json$',
